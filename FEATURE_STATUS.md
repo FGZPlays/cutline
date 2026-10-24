@@ -13,7 +13,7 @@ Status definitions: **Implemented** means present in source and connected to the
 | Debian / Ubuntu `.deb` | Fix committed; new build pending | v0.4.0 failed because electron-builder requires author/maintainer email metadata. v0.4.1 adds this metadata. |
 | Fedora `.rpm` | Fix committed; new build pending | Should proceed after the v0.4.1 author/maintainer metadata fix; not yet verified. |
 | Linux AppImage | Built during failed v0.4.0 workflow; not published | Packaging proceeded to the DEB target, then Linux job failed. v0.4.1 rerun pending. |
-| GitHub Pages deployment | Workflow configured; not deployed | Requires this source to be pushed to a GitHub repository and Pages to be set to GitHub Actions. |
+| GitHub Pages deployment | Deployed successfully | The latest website build and Pages deployment workflow completed successfully; desktop download publishing is separate. |
 | Automated versioned releases | Workflow configured; not run | The `v0.4.0` release build failed on Linux because the package author email was missing, so the publish job was skipped. Version `0.4.1` adds author/maintainer metadata; push tag `v0.4.1` to build and publish installers. |
 | Cross-device project synchronization | Not implemented | Web IndexedDB and Electron local-file-origin storage are separate. Export/import the project JSON and keep the source media available to move projects manually. |
 
