@@ -1,12 +1,15 @@
 {
   "name": "cutline-video-editor",
   "productName": "Cutline",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
   "description": "A local-first nonlinear video editor for web and desktop.",
-  "author": "Cutline Project",
+  "author": {
+    "name": "Cutline Project",
+    "email": "274916288+FGZPlays@users.noreply.github.com"
+  },
   "license": "UNLICENSED",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --open",
@@ -102,7 +105,8 @@
           ]
         }
       ],
-      "artifactName": "Cutline-${version}-${arch}.${ext}"
+      "artifactName": "Cutline-${version}-${arch}.${ext}",
+      "maintainer": "Cutline Project <274916288+FGZPlays@users.noreply.github.com>"
     },
     "deb": {
       "packageCategory": "video"
