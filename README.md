@@ -1,6 +1,6 @@
 # Cutline
 
-Cutline is one React + TypeScript video-editor codebase delivered in two experiences: a public website with the browser editor, and a standalone Electron desktop application. `#/editor` opens the actual editor; `/` is the Cutline product and downloads page.
+Cutline is one React + TypeScript video-editor codebase delivered in two experiences: a public GitHub Pages website with the browser editor, and a standalone Electron desktop application. `#/editor` opens the actual editor; `/` is the Cutline product and downloads page.
 
 **Current editor scope:** Cutline is an early nonlinear editor, not yet a full Premiere Pro replacement. Read [`FEATURE_STATUS.md`](./FEATURE_STATUS.md) for tested, partial, and unfinished functionality. Browser export currently uses real-time MediaRecorder rather than a deterministic offline FFmpeg/WebCodecs renderer.
 
@@ -39,7 +39,7 @@ npm run build
 npm run preview
 ```
 
-The static website/editor files are written to `dist/` and can be hosted on GitHub Pages, Netlify, Cloudflare Pages, or another static hosting service. A `netlify.toml` is included (`npm install ... && npm run build`, publish `dist/`). The Vite base path is relative so the same build can also be loaded from Electron's packaged `file://` URL.
+The static website/editor files are written to `dist/` and are published to GitHub Pages by the included GitHub Actions workflow. The Vite base path is relative so the same build can also be loaded from Electron's packaged `file://` URL.
 
 ## Run the standalone desktop app in development
 
@@ -79,21 +79,18 @@ The repository includes two GitHub Actions workflows:
 
 To activate them:
 
-1. Create a GitHub repository and push this project to its `main` branch.
-2. In the repository settings, enable **Pages → Build and deployment → GitHub Actions**.
-3. Push the website code to `main`; the Actions workflow deploys the site.
-4. Check `package.json` version (currently `0.4.0`), then create and push the matching release tag:
+1. Open **Settings → Pages** in the GitHub repository and set **Build and deployment → Source** to **GitHub Actions**.
+2. Push the website code to `main`; the Actions workflow builds and deploys the site.
+3. Check `package.json` version (currently `0.4.0`), then create and push the matching release tag:
 
    ```bash
    git tag v0.4.0
    git push origin v0.4.0
    ```
 
-5. Wait for the **Build Cutline desktop installers** workflow to finish successfully. It builds on Windows and Ubuntu runners and publishes release assets. The website is configured by CI to link to `https://github.com/OWNER/REPOSITORY/releases/latest/download` automatically using the actual repository name.
+4. Wait for the **Build Cutline desktop installers** workflow to finish successfully. It builds on Windows and Ubuntu runners and publishes release assets. The website is configured by CI to link to `https://github.com/OWNER/REPOSITORY/releases/latest/download` automatically using the actual repository name.
 
-The browser download links remain disabled in an unconfigured local build so the site does not expose made-up or broken URLs. Once Pages is built from GitHub Actions and the first non-draft, non-prerelease release exists, the web page links to the exact release artifacts. If you change filenames or the versioning scheme, update `src/Site.tsx` and the builder configuration together.
-
-For a Netlify deploy, add `VITE_RELEASE_DOWNLOAD_BASE=https://github.com/OWNER/REPOSITORY/releases/latest/download`, `VITE_SOURCE_REPOSITORY=https://github.com/OWNER/REPOSITORY`, and `VITE_APP_VERSION=0.4.0` in the site environment settings. For a local production-site build, copy `.env.example` to `.env.production` and replace the `OWNER/REPOSITORY` placeholders with your actual GitHub repository. Do not publish a build with placeholders.
+The browser download links remain disabled until the first non-draft, non-prerelease GitHub Release exists. GitHub Actions sets the website version, source repository, and release download base during each deployment, so no `.env` file or Netlify environment variables are required for the hosted GitHub Pages site.
 
 ## Testing
 
