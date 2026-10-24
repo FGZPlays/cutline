@@ -2,19 +2,19 @@
 
 Status definitions: **Implemented** means present in source and connected to the UI; **Tested** means an automated test or manual browser test was actually run; **Partial** means usable but limited; **Not implemented** means do not treat the feature as available.
 
-## Website and desktop distribution (0.4.0)
+## Website and desktop distribution (0.4.1)
 
 | Feature | Status | Notes |
 |---|---|---|
 | Public Cutline website | Implemented | `src/Site.tsx` provides the root page with web-editor entry and platform download cards. Actual installer links remain disabled in a local build without `VITE_RELEASE_DOWNLOAD_BASE`. |
 | In-page web editor route | Implemented | `#/editor` mounts the existing React editor; the wordmark takes users back to the website. Browser and editor share the same built bundle. |
 | Electron desktop shell | Implemented in source; package untested | Opens the editor in a standalone window, disables renderer Node integration, and enables context isolation/sandboxing. It has not been manually launched here. |
-| Windows `.exe` installer | Configured; not built | electron-builder NSIS target; CI builds on a Windows runner. No release binary has been generated in this workspace. |
-| Debian / Ubuntu `.deb` | Configured; not built | electron-builder DEB target built on Linux CI. No release binary has been generated in this workspace. |
-| Fedora `.rpm` | Configured; not built | electron-builder RPM target built on Linux CI. No release binary has been generated in this workspace. |
-| Linux AppImage | Configured; not built | Added as a portable Linux option in the release workflow. No release binary has been generated in this workspace. |
+| Windows `.exe` installer | Built in failed v0.4.0 workflow; not published | NSIS packaging succeeded, but no GitHub Release was created because the Linux matrix job failed. New v0.4.1 release run pending. |
+| Debian / Ubuntu `.deb` | Fix committed; new build pending | v0.4.0 failed because electron-builder requires author/maintainer email metadata. v0.4.1 adds this metadata. |
+| Fedora `.rpm` | Fix committed; new build pending | Should proceed after the v0.4.1 author/maintainer metadata fix; not yet verified. |
+| Linux AppImage | Built during failed v0.4.0 workflow; not published | Packaging proceeded to the DEB target, then Linux job failed. v0.4.1 rerun pending. |
 | GitHub Pages deployment | Workflow configured; not deployed | Requires this source to be pushed to a GitHub repository and Pages to be set to GitHub Actions. |
-| Automated versioned releases | Workflow configured; not run | Push a tag matching `package.json` (currently `v0.4.0`) to create the platform installers and GitHub Release assets. |
+| Automated versioned releases | Workflow configured; not run | The `v0.4.0` release build failed on Linux because the package author email was missing, so the publish job was skipped. Version `0.4.1` adds author/maintainer metadata; push tag `v0.4.1` to build and publish installers. |
 | Cross-device project synchronization | Not implemented | Web IndexedDB and Electron local-file-origin storage are separate. Export/import the project JSON and keep the source media available to move projects manually. |
 
 ## Core editing
