@@ -1,6 +1,6 @@
 import { ArrowDownToLine, ArrowRight, Check, CirclePlay, Code2, ExternalLink, Film, FolderLock, Globe2, Laptop, Monitor, Package, ShieldCheck, Sparkles, Terminal, Video } from 'lucide-react';
 
-const APP_VERSION = import.meta.env.VITE_APP_VERSION || '0.4.0';
+const APP_VERSION = import.meta.env.VITE_APP_VERSION || '0.4.1';
 const DOWNLOAD_BASE = (import.meta.env.VITE_RELEASE_DOWNLOAD_BASE || '').replace(/\/+$/, '');
 const SOURCE_REPOSITORY = (import.meta.env.VITE_SOURCE_REPOSITORY || '').replace(/\/+$/, '');
 
@@ -18,7 +18,7 @@ const downloads = [
     id: 'debian',
     name: 'Debian / Ubuntu',
     format: '.DEB package',
-    file: `Cutline-${APP_VERSION}-x64.deb`,
+    file: `Cutline-${APP_VERSION}-amd64.deb`,
     icon: Package,
     detail: 'Debian, Ubuntu and compatible distributions · x64',
     action: 'Download .deb',
@@ -27,7 +27,7 @@ const downloads = [
     id: 'fedora',
     name: 'Fedora Linux',
     format: '.RPM package',
-    file: `Cutline-${APP_VERSION}-x64.rpm`,
+    file: `Cutline-${APP_VERSION}-x86_64.rpm`,
     icon: Terminal,
     detail: 'Fedora, RHEL and RPM-based distributions · x64',
     action: 'Download .rpm',
