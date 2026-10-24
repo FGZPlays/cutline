@@ -9,10 +9,10 @@ Cutline is one React + TypeScript video-editor codebase delivered in two experie
 | Target | Build output | Build command |
 |---|---|---|
 | Website / browser editor | `dist/` static website | `npm run build` |
-| Windows 10+ x64 | `Cutline-Setup-0.4.0.exe` | `npm run dist:win` on Windows or the release workflow |
-| Debian / Ubuntu x64 | `Cutline-0.4.0-x64.deb` | `npm run dist:linux` on Linux or the release workflow |
-| Fedora / RPM x64 | `Cutline-0.4.0-x64.rpm` | `npm run dist:linux` on Linux or the release workflow |
-| Portable Linux x64 | `Cutline-0.4.0-x64.AppImage` | `npm run dist:linux` on Linux or the release workflow |
+| Windows 10+ x64 | `Cutline-Setup-0.4.1.exe` | `npm run dist:win` on Windows or the release workflow |
+| Debian / Ubuntu x64 | `Cutline-0.4.1-amd64.deb` | `npm run dist:linux` on Linux or the release workflow |
+| Fedora / RPM x64 | `Cutline-0.4.1-x86_64.rpm` | `npm run dist:linux` on Linux or the release workflow |
+| Portable Linux x64 | `Cutline-0.4.1-x86_64.AppImage` | `npm run dist:linux` on Linux or the release workflow |
 
 Release filenames include the package version. Update `package.json` and the release tag together.
 
@@ -66,11 +66,13 @@ npm install
 npm run dist:linux
 ```
 
-Packaged files are written to `release/`. On Fedora, install a built RPM with `sudo dnf install ./release/Cutline-0.4.0-x64.rpm`. On Debian/Ubuntu, install a DEB with `sudo apt install ./release/Cutline-0.4.0-x64.deb`. AppImage requires execute permission before first launch (`chmod +x ./release/Cutline-0.4.0-x64.AppImage`).
+Packaged files are written to `release/`. On Fedora, install a built RPM with `sudo dnf install ./release/Cutline-0.4.1-x86_64.rpm`. On Debian/Ubuntu, install a DEB with `sudo apt install ./release/Cutline-0.4.1-amd64.deb`. AppImage requires execute permission before first launch (`chmod +x ./release/Cutline-0.4.1-x86_64.AppImage`).
 
 The Windows and Linux packages are built on their native CI runners by design. Avoid cross-building Windows from Fedora to claim a verified Windows installer; create a version tag and let GitHub Actions build each platform on its own runner.
 
 ## Publish the website and download releases
+
+The v0.4.0 release attempt failed on Linux packaging because Debian/RPM metadata had no maintainer email. v0.4.1 adds the required package author and maintainer metadata. Push the matching v0.4.1 tag to build and publish a fresh release.
 
 The repository includes two GitHub Actions workflows:
 
@@ -81,11 +83,11 @@ To activate them:
 
 1. Open **Settings → Pages** in the GitHub repository and set **Build and deployment → Source** to **GitHub Actions**.
 2. Push the website code to `main`; the Actions workflow builds and deploys the site.
-3. Check `package.json` version (currently `0.4.0`), then create and push the matching release tag:
+3. Check `package.json` version (currently `0.4.1`), then create and push the matching release tag:
 
    ```bash
-   git tag v0.4.0
-   git push origin v0.4.0
+   git tag v0.4.1
+   git push origin v0.4.1
    ```
 
 4. Wait for the **Build Cutline desktop installers** workflow to finish successfully. It builds on Windows and Ubuntu runners and publishes release assets. The website is configured by CI to link to `https://github.com/OWNER/REPOSITORY/releases/latest/download` automatically using the actual repository name.
