@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://fgzplays.github.io/cutline/sitemap.xml
