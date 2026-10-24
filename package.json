@@ -1,0 +1,111 @@
+{
+  "name": "cutline-video-editor",
+  "productName": "Cutline",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.cjs",
+  "description": "A local-first nonlinear video editor for web and desktop.",
+  "author": "Cutline Project",
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --open",
+    "dev:web": "vite --host 0.0.0.0 --open",
+    "dev:desktop": "node scripts/dev-electron.mjs",
+    "build": "tsc -b && vite build",
+    "build:web": "npm run build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "node --experimental-strip-types --test tests/*.node.test.mjs",
+    "test:watch": "vitest",
+    "test:vitest": "vitest run",
+    "dist:win": "npm run build && electron-builder --win nsis --x64 --publish never",
+    "dist:linux": "npm run build && electron-builder --linux deb rpm AppImage --x64 --publish never"
+  },
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^45.0.0",
+    "electron-builder": "^26.18.0",
+    "typescript": "~5.6.3",
+    "vite": "^6.0.1",
+    "vitest": "^2.1.5",
+    "jsdom": "^25.0.1",
+    "@types/node": "^22.15.30"
+  },
+  "build": {
+    "appId": "com.cutline.editor",
+    "productName": "Cutline",
+    "asar": true,
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json",
+      "build/**/*"
+    ],
+    "extraMetadata": {
+      "main": "electron/main.cjs"
+    },
+    "artifactName": "Cutline-${version}-${arch}.${ext}",
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Cutline-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Cutline"
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "AudioVideo",
+      "executableName": "cutline",
+      "synopsis": "Local-first video editing",
+      "description": "Cutline is a local-first nonlinear video editor for web and desktop.",
+      "target": [
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "rpm",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Cutline-${version}-${arch}.${ext}"
+    },
+    "deb": {
+      "packageCategory": "video"
+    }
+  }
+}

@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.vite/
+coverage/
+*.log
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+vitest.config.js
+vitest.config.d.ts
+release/
+.env
+.env.production
+.env.local

@@ -1,0 +1,75 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync, existsSync } from 'node:fs';
+
+const read = path => readFileSync(new URL(path, import.meta.url), 'utf8');
+const pkg = JSON.parse(read('../package.json'));
+
+test('one versioned project provides web and desktop commands', () => {
+  assert.equal(pkg.productName, 'Cutline');
+  assert.equal(pkg.version, '0.4.0');
+  assert.equal(pkg.main, 'electron/main.cjs');
+  assert.ok(pkg.scripts['dev:web']);
+  assert.ok(pkg.scripts['dev:desktop']);
+  assert.ok(pkg.scripts['build:web']);
+  assert.ok(pkg.scripts['dist:win']);
+  assert.ok(pkg.scripts['dist:linux']);
+});
+
+test('electron-builder targets Windows installer, Debian, Fedora, and portable Linux', () => {
+  const build = pkg.build;
+  assert.equal(build.productName, 'Cutline');
+  assert.ok(build.files.includes('dist/**/*'));
+  assert.ok(build.files.includes('electron/**/*'));
+  assert.ok(build.win.target.some(item => item.target === 'nsis'));
+  const targets = build.linux.target.map(item => item.target);
+  assert.ok(targets.includes('deb'));
+  assert.ok(targets.includes('rpm'));
+  assert.ok(targets.includes('AppImage'));
+  assert.equal(build.win.artifactName, 'Cutline-Setup-${version}.${ext}');
+  assert.equal(build.linux.artifactName, 'Cutline-${version}-${arch}.${ext}');
+});
+
+test('desktop wrapper hardens BrowserWindow and opens the editor route', () => {
+  const main = read('../electron/main.cjs');
+  assert.match(main, /contextIsolation:\s*true/);
+  assert.match(main, /nodeIntegration:\s*false/);
+  assert.match(main, /sandbox:\s*true/);
+  assert.match(main, /webSecurity:\s*true/);
+  assert.match(main, /#\/editor/);
+  assert.match(main, /setWindowOpenHandler/);
+});
+
+test('website contains a working web-editor route and disabled installer links until configured', () => {
+  const site = read('../src/Site.tsx');
+  const bootstrap = read('../src/main.tsx');
+  assert.match(site, /href="#\/editor"/);
+  assert.match(site, /VITE_RELEASE_DOWNLOAD_BASE/);
+  assert.match(site, /Cutline-Setup-\$\{APP_VERSION\}\.exe/);
+  assert.match(site, /Cutline-\$\{APP_VERSION\}-x64\.deb/);
+  assert.match(site, /Cutline-\$\{APP_VERSION\}-x64\.rpm/);
+  assert.match(bootstrap, /window\.location\.hash === '#\/editor'/);
+  assert.match(bootstrap, /addEventListener\('hashchange'/);
+});
+
+test('CI workflows build the website and publish desktop artifacts on a version tag', () => {
+  const website = read('../.github/workflows/site.yml');
+  const release = read('../.github/workflows/release.yml');
+  assert.match(website, /actions\/upload-pages-artifact/);
+  assert.match(website, /actions\/deploy-pages/);
+  assert.match(website, /repository_dispatch/);
+  assert.match(website, /releases\/latest\/download/);
+  assert.match(website, /releases\/latest/);
+  assert.match(release, /cutline-release-published/);
+  assert.match(release, /dist:win/);
+  assert.match(release, /dist:linux/);
+  assert.match(release, /softprops\/action-gh-release/);
+  assert.match(release, /pattern: cutline-\*/);
+});
+
+test('required desktop entry and icon resources exist', () => {
+  assert.ok(existsSync(new URL('../electron/main.cjs', import.meta.url)));
+  assert.ok(existsSync(new URL('../build/icon.png', import.meta.url)));
+  assert.ok(existsSync(new URL('../build/icon.ico', import.meta.url)));
+  assert.ok(existsSync(new URL('../public/favicon.svg', import.meta.url)));
+});
