@@ -49,8 +49,8 @@ test('website contains a working web-editor route and disabled installer links u
   assert.match(site, /href="#\/editor"/);
   assert.match(site, /VITE_RELEASE_DOWNLOAD_BASE/);
   assert.match(site, /Cutline-Setup-\$\{APP_VERSION\}\.exe/);
-  assert.match(site, /Cutline-\$\{APP_VERSION\}-x64\.deb/);
-  assert.match(site, /Cutline-\$\{APP_VERSION\}-x64\.rpm/);
+  assert.match(site, /Cutline-\$\{APP_VERSION\}-amd64\.deb/);
+  assert.match(site, /Cutline-\$\{APP_VERSION\}-x86_64\.rpm/);
   assert.match(bootstrap, /window\.location\.hash === '#\/editor'/);
   assert.match(bootstrap, /addEventListener\('hashchange'/);
 });
