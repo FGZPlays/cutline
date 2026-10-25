@@ -46,7 +46,7 @@ const downloads = [
     action: 'Download APK',
     platform: 'android',
   },
-];;
+];
 
 export default function Site() {
   const [platform, setPlatform] = useState<'windows' | 'linux' | 'android' | 'mac' | 'unknown'>('unknown');
