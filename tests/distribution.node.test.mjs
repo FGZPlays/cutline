@@ -66,8 +66,8 @@ test('Smooth slow-mo FFmpeg core assets are copied before builds', () => {
   const pkg = JSON.parse(read('../package.json'));
   const script = read('../scripts/copy-ffmpeg-core.mjs');
   assert.equal(pkg.scripts.prebuild, 'node scripts/copy-ffmpeg-core.mjs');
-  assert.match(script, /ffmpeg-core\\.wasm/);
-  assert.match(script, /ffmpeg-core\\.js/);
+  assert.match(script, /ffmpeg-core\.wasm/);
+  assert.match(script, /ffmpeg-core\.js/);
 });
 
 test('CI workflows build the website and publish desktop artifacts on a version tag', () => {
