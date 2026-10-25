@@ -24,7 +24,7 @@ test('release workflow requires updater metadata for each platform', () => {
 test('release version and portable Linux filename stay aligned', () => {
   const pkg = JSON.parse(read('../package.json'));
   const site = read('../src/Site.tsx');
-  assert.equal(pkg.version, '0.4.2');
+  assert.equal(pkg.version, '0.4.3');
   assert.match(site, /Cutline-\$\{APP_VERSION\}-x86_64\.AppImage/);
 });
 
