@@ -7,7 +7,7 @@ const pkg = JSON.parse(read('../package.json'));
 
 test('one versioned project provides web and desktop commands', () => {
   assert.equal(pkg.productName, 'Cutline');
-  assert.equal(pkg.version, '0.4.2');
+  assert.equal(pkg.version, '0.4.3');
   assert.equal(typeof pkg.author.email, 'string');
   assert.ok(pkg.author.email.includes('@'));
   assert.match(pkg.build.linux.maintainer, /<[^<>]+@[^<>]+>/);
