@@ -157,3 +157,17 @@
 @media(max-width:980px){.desktop-home-hero{grid-template-columns:minmax(0,1fr) minmax(290px,.9fr);padding:28px;gap:20px}.desktop-home-hero h1{font-size:43px}.desktop-home-preview-row{grid-template-columns:minmax(0,1fr) 64px}.desktop-home-preview-screen{min-height:120px}.desktop-home-capabilities{gap:10px}.desktop-home-main{width:calc(100% - 44px)}.desktop-home-topbar{padding:0 22px}}
 @media(max-width:760px){.desktop-home-topbar{height:62px;padding:0 17px}.desktop-home-version{display:none}.desktop-home-main{width:calc(100% - 34px)}.desktop-home-overline{margin-top:19px}.desktop-home-overline-right{display:none}.desktop-home-hero{grid-template-columns:1fr;padding:26px 25px 20px;gap:12px}.desktop-home-hero h1{font-size:47px}.desktop-home-visual{max-width:420px;justify-self:center;padding-top:12px}.desktop-home-preview-screen{min-height:135px}.desktop-home-project-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.desktop-home-footer{align-items:flex-start;flex-direction:column;gap:9px}}
 @media(max-width:480px){.desktop-home-brand{gap:7px}.desktop-home-wordmark{font-size:20px}.desktop-home-edition{font-size:8px;letter-spacing:1px}.desktop-home-brand-divider{margin:0 1px}.desktop-home-top-action{padding:9px 10px;font-size:10px}.desktop-home-main{width:calc(100% - 24px)}.desktop-home-hero{padding:23px 17px 16px}.desktop-home-hero h1{font-size:39px;letter-spacing:-1.9px}.desktop-home-subtitle{font-size:11px;line-height:1.7}.desktop-home-actions{align-items:stretch;flex-direction:column}.desktop-home-primary,.desktop-home-secondary{width:100%}.desktop-home-capabilities{gap:9px}.desktop-home-capabilities span{font-size:8px}.desktop-home-project-grid{grid-template-columns:1fr}.desktop-home-empty{align-items:flex-start;flex-wrap:wrap}.desktop-home-inline-action{margin-left:0}.desktop-home-recent-count{font-size:7px}.desktop-home-section-heading h2{font-size:19px}}
+
+/* Smooth slow-motion is generated frame interpolation, separate from speed-ramp easing. */
+.smooth-slowmo-control{margin:10px 0 2px;padding:10px;border:1px solid #41464d;border-radius:5px;background:linear-gradient(135deg,#24282d,#202328)}
+.smooth-slowmo-control-heading{display:flex;align-items:center;gap:7px;min-width:0}
+.smooth-slowmo-icon{width:25px;height:25px;flex-shrink:0;display:grid;place-items:center;border:1px solid #819aab38;border-radius:5px;background:#9db9ca12;color:#b4cad8}
+.smooth-slowmo-title{flex:1;min-width:0;color:#e1e7eb;font-size:10px;font-weight:800}
+.smooth-slowmo-state{padding:3px 5px;border-radius:3px;background:#244436;color:#a8d7bf;font-size:8px;font-weight:800;letter-spacing:.6px}
+.smooth-slowmo-control>p{margin:8px 0;color:#919aa3;font-size:9px;line-height:1.55}
+.smooth-slowmo-button{width:100%;min-height:30px;padding:7px 9px;border:1px solid #718797;border-radius:4px;background:#36434d;color:#edf3f6;font-size:10px;font-weight:750;text-align:center}
+.smooth-slowmo-button:hover:not(:disabled){background:#41535f;border-color:#9ab2c1}
+.smooth-slowmo-button.enabled{background:#283d33;border-color:#4c7861;color:#c5e8d4}
+.smooth-slowmo-button:disabled{opacity:.55;cursor:not-allowed}
+.smooth-slowmo-control .smooth-slowmo-note{color:#7e9a8b}
+.smooth-slowmo-control .smooth-slowmo-warning{padding-left:7px;border-left:2px solid #c9975b;color:#d1ad80}
