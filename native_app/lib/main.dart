@@ -68,13 +68,12 @@ class _EditorHomeState extends State<EditorHome> {
   Future<void> _importMedia() async {
     setState(() { _busy = true; _error = null; });
     try {
-      final result = await FilePicker.platform.pickFiles(
-        allowMultiple: true,
+      final files = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['mp4','mov','mkv','webm','avi','m4v','mp3','wav','aac','m4a','flac','png','jpg','jpeg','webp'],
       );
-      if (result != null) {
-        final incoming = result.files.where((f) => f.path != null).map((f) => MediaClip(f.path!)).toList();
+      if (files.isNotEmpty) {
+        final incoming = files.where((f) => f.path != null).map((f) => MediaClip(f.path!)).toList();
         if (incoming.isNotEmpty && mounted) {
           setState(() { _clips.addAll(incoming); _selected = _clips.length - 1; });
           await _openClip(_selected);
