@@ -35,6 +35,9 @@ test('electron-builder targets Windows installer, Debian, Fedora, and portable L
   assert.equal(build.publish[0].owner, 'FGZPlays');
   assert.equal(build.publish[0].repo, 'cutline');
   assert.equal(pkg.dependencies['electron-updater'], '^6.8.11');
+  assert.equal(pkg.dependencies['@ffmpeg/ffmpeg'], '^0.12.15');
+  assert.equal(pkg.dependencies['@ffmpeg/core'], '^0.12.10');
+  assert.equal(pkg.dependencies['@ffmpeg/util'], '^0.12.2');
 });
 
 test('desktop wrapper hardens BrowserWindow and starts at the desktop home screen', () => {
@@ -57,6 +60,14 @@ test('website contains a working web-editor route and disabled installer links u
   assert.match(site, /Cutline-\$\{APP_VERSION\}-x86_64\.rpm/);
   assert.match(bootstrap, /route === '#\/editor' \|\| route\.startsWith\('#\/editor\?'\)/);
   assert.match(bootstrap, /addEventListener\('hashchange'/);
+});
+
+test('Smooth slow-mo FFmpeg core assets are copied before builds', () => {
+  const pkg = JSON.parse(read('../package.json'));
+  const script = read('../scripts/copy-ffmpeg-core.mjs');
+  assert.equal(pkg.scripts.prebuild, 'node scripts/copy-ffmpeg-core.mjs');
+  assert.match(script, /ffmpeg-core\\.wasm/);
+  assert.match(script, /ffmpeg-core\\.js/);
 });
 
 test('CI workflows build the website and publish desktop artifacts on a version tag', () => {
