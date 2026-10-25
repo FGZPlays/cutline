@@ -14,12 +14,11 @@ export function minimumClipPlaybackRate(clip: Pick<Clip, 'playbackRate' | 'keyfr
 export function smoothSlowMoTargetFps(
   clip: Pick<Clip, 'playbackRate' | 'keyframes'>,
   sequenceFps: number,
-  sourceFps = 0,
 ): number {
   const baseFps = Math.max(30, Math.min(60, Math.round(Number.isFinite(sequenceFps) ? sequenceFps : 30)));
   const requested = Math.ceil(baseFps / minimumClipPlaybackRate(clip));
   const rounded = Math.ceil(requested / 30) * 30;
-  return Math.max(Math.ceil(sourceFps || 0), 60, Math.min(120, rounded));
+  return Math.max(60, Math.min(120, rounded));
 }
 
 export function smoothSlowMoRateExceedsCap(
