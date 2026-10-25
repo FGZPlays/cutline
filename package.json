@@ -22,13 +22,20 @@
     "test:watch": "vitest",
     "test:vitest": "vitest run",
     "dist:win": "npm run build && electron-builder --win nsis --x64 --publish never",
-    "dist:linux": "npm run build && electron-builder --linux deb rpm AppImage --x64 --publish never"
+    "dist:linux": "npm run build && electron-builder --linux deb rpm AppImage --x64 --publish never",
+    "prebuild": "node scripts/copy-ffmpeg-core.mjs",
+    "predev": "node scripts/copy-ffmpeg-core.mjs",
+    "predev:web": "node scripts/copy-ffmpeg-core.mjs",
+    "predev:desktop": "node scripts/copy-ffmpeg-core.mjs"
   },
   "dependencies": {
+    "@ffmpeg/core": "^0.12.10",
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
+    "electron-updater": "^6.8.11",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "electron-updater": "^6.8.11"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",

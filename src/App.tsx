@@ -12,6 +12,8 @@ import { classifyFile, makeAsset } from './lib/media';
 import { estimateStorage, getAssetBlob, getProject, importAssetBlobs, listProjects, saveProject, storeAssetBlob } from './lib/storage';
 import { animatedEffectParam, drawFrame, supportedRecordingMimeType, syncMediaToTime } from './lib/rendering';
 import { EFFECT_CATALOG, createEffect, getEffectDefinition, getEffectLabel } from './lib/effects';
+import { generateSmoothSlowMoMedia } from './lib/smooth-slowmo';
+import { minimumClipPlaybackRate, smoothSlowMoRateExceedsCap, smoothSlowMoTargetFps } from './lib/smooth-slowmo-rate';
 
 const TRACK_HEADER = 156;
 const BASE_WIDTH = 76;
@@ -60,7 +62,10 @@ export default function App() {
     return { projectId: params.get('project'), startFresh: params.get('new') === '1' };
   });
   const [project, setProject] = useState<Project>(() => newProject());
+  const projectRef = useRef(project);
+  projectRef.current = project;
   const [projects, setProjects] = useState<Project[]>([]);
+  const [smoothProcessingClipId, setSmoothProcessingClipId] = useState<string | null>(null);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [playhead, setPlayheadState] = useState(0);
@@ -119,7 +124,7 @@ export default function App() {
   const selectedAsset = project.assets.find(asset => asset.id === selectedAssetId) ?? null;
   const duration = useMemo(() => Math.max(15, sequenceDuration(project)), [project]);
   const timeWidth = Math.max(duration * zoom, 1200);
-  const visibleAssets = project.assets.filter(asset => asset.name.toLowerCase().includes(assetFilter.toLowerCase()));
+  const visibleAssets = project.assets.filter(asset => !asset.hidden && asset.name.toLowerCase().includes(assetFilter.toLowerCase()));
   const supportsExport = supportedRecordingMimeType();
 
   const commitProject = useCallback((next: Project, selected?: string | null) => {
@@ -180,7 +185,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    setMediaCount(project.assets.length);
+    setMediaCount(project.assets.filter(asset => !asset.hidden).length);
     // Load local image elements for drawing onto the compositing canvas.
     const alive = new Set<string>();
     for (const asset of project.assets.filter(item => item.kind === 'image')) {
@@ -646,6 +651,108 @@ export default function App() {
     effectDragStartRef.current = null;
   };
 
+
+  const generateSmoothSlowMo = async (clipId: string) => {
+    const startProject = projectRef.current;
+    const clip = startProject.clips.find(item => item.id === clipId);
+    if (!clip || clip.kind !== 'video' || !clip.assetId) return;
+    const originalAsset = startProject.assets.find(asset => asset.id === clip.assetId && !asset.hidden);
+    if (!originalAsset) { setNotice('The original video asset could not be found.'); return; }
+
+    const targetFps = smoothSlowMoTargetFps(clip, Math.max(30, startProject.settings.fps));
+    const cached = startProject.assets
+      .filter(asset => asset.hidden && asset.generatedBy === 'smooth-slow-mo' &&
+        asset.originalAssetId === originalAsset.id && (asset.interpolationFps ?? 0) >= targetFps)
+      .sort((a, b) => (a.interpolationFps ?? 0) - (b.interpolationFps ?? 0))[0];
+
+    setSmoothProcessingClipId(clipId);
+    try {
+      let generatedAsset: Asset | undefined = cached;
+      let generatedBlob: Blob | undefined = cached ? await getAssetBlob(cached.id) : undefined;
+      if (!generatedAsset || !generatedBlob) {
+        const sourceBlob = await getAssetBlob(originalAsset.id) ??
+          (urls.get(originalAsset.id) ? await fetch(urls.get(originalAsset.id)!).then(response => {
+            if (!response.ok) throw new Error('Could not read the original media from local storage.');
+            return response.blob();
+          }) : undefined);
+        if (!sourceBlob) throw new Error('The original video is unavailable. Relink it before generating smooth slow-motion.');
+
+        setNotice('Loading the local motion-interpolation engine…');
+        const result = await generateSmoothSlowMoMedia(
+          sourceBlob,
+          originalAsset.name,
+          targetFps,
+          progress => setNotice('Generating motion-interpolated frames… ' + Math.round(progress * 100) + '%'),
+        );
+        generatedBlob = result.blob;
+        const generatedId = `smooth_${originalAsset.id}_${result.interpolationFps}`;
+        generatedAsset = {
+          id: generatedId,
+          name: originalAsset.name + ' · Smooth slow-mo cache',
+          kind: 'video',
+          mimeType: 'video/mp4',
+          size: result.blob.size,
+          duration: originalAsset.duration,
+          width: originalAsset.width,
+          height: originalAsset.height,
+          hidden: true,
+          generatedBy: 'smooth-slow-mo',
+          originalAssetId: originalAsset.id,
+          interpolationFps: result.interpolationFps,
+        };
+        await storeAssetBlob(generatedId, generatedAsset.name, result.blob);
+        setUrls(current => {
+          const next = new Map(current);
+          const previousUrl = next.get(generatedId);
+          if (previousUrl) URL.revokeObjectURL(previousUrl);
+          next.set(generatedId, URL.createObjectURL(result.blob));
+          return next;
+        });
+      } else if (!urls.has(generatedAsset.id)) {
+        setUrls(current => new Map(current).set(generatedAsset!.id, URL.createObjectURL(generatedBlob!)));
+      }
+
+      const latestProject = projectRef.current;
+      if (!latestProject.clips.some(item => item.id === clipId)) return;
+      const nextAssets = latestProject.assets.some(asset => asset.id === generatedAsset!.id)
+        ? latestProject.assets
+        : [...latestProject.assets, generatedAsset!];
+      const nextProject: Project = {
+        ...latestProject,
+        assets: nextAssets,
+        clips: latestProject.clips.map(item => item.id === clipId
+          ? { ...item, smoothSlowMoAssetId: generatedAsset!.id }
+          : item),
+        updatedAt: Date.now(),
+      };
+      setPast(items => [...items.slice(-39), latestProject]);
+      setFuture([]);
+      setProject(nextProject);
+      setNotice('Smooth slow-mo ready · ' + generatedAsset!.interpolationFps + ' fps motion-compensated frames generated locally');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not generate smooth slow-motion frames.');
+    } finally {
+      setSmoothProcessingClipId(current => current === clipId ? null : current);
+    }
+  };
+
+  const disableSmoothSlowMo = (clipId: string) => {
+    const latestProject = projectRef.current;
+    const clip = latestProject.clips.find(item => item.id === clipId);
+    if (!clip?.smoothSlowMoAssetId) return;
+    const nextProject: Project = {
+      ...latestProject,
+      clips: latestProject.clips.map(item => item.id === clipId
+        ? { ...item, smoothSlowMoAssetId: undefined }
+        : item),
+      updatedAt: Date.now(),
+    };
+    setPast(items => [...items.slice(-39), latestProject]);
+    setFuture([]);
+    setProject(nextProject);
+    setNotice('Smooth slow-mo disabled for this clip. The generated frames are kept in the local cache.');
+  };
+
   const setSpeedRamp = (clipId: string, rate: number) => {
     const target = project.clips.find(clip => clip.id === clipId);
     if (!target || (target.kind !== 'video' && target.kind !== 'audio')) return;
@@ -676,6 +783,15 @@ export default function App() {
 
   const exportVideo = async () => {
     if (!supportsExport) { setNotice('This browser does not support MediaRecorder video export. Try a recent Chromium-based desktop browser.'); return; }
+    const requiredForExport = Math.max(30, exportFps, project.settings.fps);
+    const staleSmoothClip = project.clips.find(clip => clip.kind === 'video' && clip.smoothSlowMoAssetId && (
+      !urls.has(clip.smoothSlowMoAssetId) ||
+      (project.assets.find(asset => asset.id === clip.smoothSlowMoAssetId)?.interpolationFps ?? 0) < smoothSlowMoTargetFps(clip, requiredForExport)
+    ));
+    if (staleSmoothClip) {
+      setNotice('Regenerate Smooth slow-mo for "' + staleSmoothClip.name + '" before export; the current speed requires more interpolated frames.');
+      return;
+    }
     const canvas = document.createElement('canvas');
     const settings: SequenceSettings = { ...project.settings, fps: exportFps };
     if (exportPreset === '720p') { settings.width = 1280; settings.height = 720; }
@@ -711,7 +827,10 @@ export default function App() {
     try {
       for (const clip of exportProject.clips) {
         if (!clip.assetId) continue;
-        const src = urls.get(clip.assetId);
+        const sourceId = clip.kind === 'video' && clip.smoothSlowMoAssetId && urls.has(clip.smoothSlowMoAssetId)
+          ? clip.smoothSlowMoAssetId
+          : clip.assetId;
+        const src = urls.get(sourceId);
         if (!src) throw new Error(`Media missing: ${clip.name}. Relink it before export.`);
         if (clip.kind === 'video') {
           const video = document.createElement('video'); video.src = src; video.muted = true; video.preload = 'auto'; video.playsInline = true;
@@ -1071,6 +1190,34 @@ export default function App() {
                 <NumberControl label="Speed" value={selectedClip.playbackRate} min={0.25} max={4} step={0.25} suffix="×" onChange={v => { const scaledDuration = Math.max(0.05, selectedClip.duration * selectedClip.playbackRate / v); const linkedId = selectedClip.linkedClipId; const clips = project.clips.map(item => item.id === selectedClip.id || item.id === linkedId ? { ...item, playbackRate: v, duration: scaledDuration, keyframes: item.keyframes.filter(frame => frame.property !== 'playbackRate') } : item); commitProject({ ...project, clips }, selectedClip.id); }} />
                 <NumberControl label="Speed ramp" value={playbackRateAt(selectedClip, Math.max(0, Math.min(selectedClip.duration, playhead - selectedClip.start)))} min={0.1} max={4} step={0.05} suffix="×" onChange={v => setSpeedRamp(selectedClip.id, v)} keyframe={() => addKeyframe('playbackRate')} />
                 <p className="speed-ramp-help">Move the playhead and set different speeds at different points. Ease-in-out keyframes create smooth slow-motion ramps.</p>
+                {selectedClip.kind === 'video' && (() => {
+                  const enabledAsset = selectedClip.smoothSlowMoAssetId
+                    ? project.assets.find(asset => asset.id === selectedClip.smoothSlowMoAssetId)
+                    : undefined;
+                  const requiredFps = smoothSlowMoTargetFps(selectedClip, Math.max(30, project.settings.fps));
+                  const needsRefresh = Boolean(selectedClip.smoothSlowMoAssetId &&
+                    (!enabledAsset || !urls.has(selectedClip.smoothSlowMoAssetId) ||
+                      (enabledAsset.interpolationFps ?? 0) < requiredFps));
+                  const minRate = minimumClipPlaybackRate(selectedClip);
+                  const processing = smoothProcessingClipId === selectedClip.id;
+                  return <div className="smooth-slowmo-control">
+                    <div className="smooth-slowmo-control-heading">
+                      <span className="smooth-slowmo-icon"><Sparkles size={13} /></span>
+                      <span className="smooth-slowmo-title">Smooth slow-mo</span>
+                      {enabledAsset && !needsRefresh && <span className="smooth-slowmo-state">ON</span>}
+                    </div>
+                    <p>Generate intermediate motion-compensated frames on this device. This is separate from speed ramps and may take time.</p>
+                    {enabledAsset && !needsRefresh
+                      ? <button className="smooth-slowmo-button enabled" type="button" disabled={processing} onClick={() => disableSmoothSlowMo(selectedClip.id)}>Disable smooth slow-mo</button>
+                      : <button className="smooth-slowmo-button" type="button" disabled={processing || minRate >= 0.995} onClick={() => void generateSmoothSlowMo(selectedClip.id)}>
+                          {processing ? 'Generating frames…' : needsRefresh ? 'Regenerate at ' + requiredFps + ' fps' : 'Generate smooth slow-mo'}
+                        </button>}
+                    {minRate >= 0.995 && !enabledAsset && <p className="smooth-slowmo-note">Slow the clip first with Speed or Speed ramp to enable frame interpolation.</p>}
+                    {needsRefresh && <p className="smooth-slowmo-warning">The clip speed changed and needs more generated frames. Regenerate before exporting.</p>}
+                    {smoothSlowMoRateExceedsCap(selectedClip, Math.max(30, project.settings.fps)) && <p className="smooth-slowmo-warning">Below roughly 0.25×, the 120 fps processing limit may not produce a new frame for every output frame.</p>}
+                    {enabledAsset && !needsRefresh && <p className="smooth-slowmo-note">Generated at {enabledAsset.interpolationFps} fps. Source media remains unchanged.</p>}
+                  </div>;
+                })()}
               </>}
             </InspectorSection>
             {selectedClip.kind === 'audio' && <InspectorSection title="AUDIO" icon={<Volume2 size={13} />}><NumberControl label="Gain" value={selectedClip.gain} min={0} max={1} step={0.05} onChange={v => replaceClip(selectedClip.id, { gain: v })} keyframe={() => addKeyframe('gain')} /><NumberControl label="Pan" value={selectedClip.pan} min={-1} max={1} step={0.1} onChange={v => replaceClip(selectedClip.id, { pan: v })} keyframe={() => addKeyframe('pan')} /></InspectorSection>}
@@ -1119,9 +1266,12 @@ export default function App() {
 
       {/* Media elements used for real timeline preview; kept off-screen rather than removed from the document. */}
       <div className="media-runtime-bin" aria-hidden="true">{project.clips.map(clip => {
-        if (!clip.assetId || !urls.get(clip.assetId)) return null;
-        if (clip.kind === 'video') return <video key={clip.id} ref={element => { if (element) mediaRefMap.current.set(clip.id, element); else mediaRefMap.current.delete(clip.id); }} src={urls.get(clip.assetId)} preload="auto" muted playsInline />;
-        if (clip.kind === 'audio') return <audio key={clip.id} ref={element => { if (element) audioRefMap.current.set(clip.id, element); else audioRefMap.current.delete(clip.id); }} src={urls.get(clip.assetId)} preload="auto" />;
+        const sourceId = clip.kind === 'video' && clip.smoothSlowMoAssetId && urls.has(clip.smoothSlowMoAssetId)
+          ? clip.smoothSlowMoAssetId
+          : clip.assetId;
+        if (!sourceId || !urls.get(sourceId)) return null;
+        if (clip.kind === 'video') return <video key={clip.id} ref={element => { if (element) mediaRefMap.current.set(clip.id, element); else mediaRefMap.current.delete(clip.id); }} src={urls.get(sourceId)} preload="auto" muted playsInline />;
+        if (clip.kind === 'audio') return <audio key={clip.id} ref={element => { if (element) audioRefMap.current.set(clip.id, element); else audioRefMap.current.delete(clip.id); }} src={urls.get(sourceId)} preload="auto" />;
         return null;
       })}</div>
 
