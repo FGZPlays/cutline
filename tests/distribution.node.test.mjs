@@ -60,7 +60,7 @@ test('website contains a working web-editor route and current platform downloads
   assert.match(site, /Cutline-\$\{APP_VERSION\}-x86_64\.rpm/);
   assert.match(site, /Cutline-\$\{APP_VERSION\}-android\.apk/);
   assert.match(site, /Cutline-\$\{APP_VERSION\}-x86_64\.AppImage/);
-  assert.match(bootstrap, /route === '#\/editor' \|\| route\.startsWith\('#\/editor\?')/);
+  assert.ok(bootstrap.includes("route === '#/editor' || route.startsWith('#/editor?')"));
   assert.match(bootstrap, /addEventListener\('hashchange'/);
 });
 
