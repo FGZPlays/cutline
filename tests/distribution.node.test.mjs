@@ -43,7 +43,7 @@ test('desktop wrapper hardens BrowserWindow and starts at the desktop home scree
   assert.match(main, /nodeIntegration:\s*false/);
   assert.match(main, /sandbox:\s*true/);
   assert.match(main, /webSecurity:\s*true/);
-  assert.match(main, /#\/editor/);
+  assert.match(main, /#\/desktop-home/);
   assert.match(main, /setWindowOpenHandler/);
 });
 
