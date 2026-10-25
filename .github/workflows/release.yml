@@ -1,4 +1,5 @@
-# Recovery note: use a commit message containing [build-release] to build the current package version once.
+# Build versioned Windows EXE, Linux DEB/RPM/AppImage, native desktop bundles, and Android APK.
+# A [build-release] commit message rebuilds the current package version; workflow_dispatch also works.
 name: Build Cutline desktop installers
 
 on:
