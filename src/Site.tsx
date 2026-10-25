@@ -34,7 +34,7 @@ const downloads = [
     icon: Terminal,
     detail: 'Fedora, RHEL and RPM-based distributions · x64',
     action: 'Download .rpm',
-    platform: 'linux',
+    platform: 'fedora',
   },
   {
     id: 'android',
