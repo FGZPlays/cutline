@@ -49,14 +49,25 @@ export function splitClip(clips: Clip[], clipId: string, time: number): Clip[] {
   const firstDuration = time - clip.start;
   const secondDuration = clip.duration - firstDuration;
   const first = { ...clip, duration: firstDuration };
+  const rateAtCut = playbackRateAt(clip, firstDuration);
+  const speedFrames = clip.keyframes.filter(k => k.property === 'playbackRate').sort((a, b) => a.time - b.time);
+  const activeSpeedFrame = speedFrames.filter(frame => frame.time <= firstDuration).at(-1);
+  const futureFrames = clip.keyframes
+    .filter(k => k.property === 'playbackRate' ? k.time > firstDuration + EPSILON : k.time >= firstDuration)
+    .map(k => ({ ...k, id: createId('kf'), time: Math.max(0, k.time - firstDuration) }));
+  if (speedFrames.length) futureFrames.push({
+    id: createId('kf'), property: 'playbackRate', time: 0, value: rateAtCut,
+    easing: activeSpeedFrame?.easing ?? 'ease-in-out',
+  });
   const second: Clip = {
     ...clip,
     id: createId('clip'),
     name: `${clip.name} (cut)`,
     start: time,
-    sourceIn: clip.sourceIn + firstDuration * clip.playbackRate,
+    sourceIn: clip.sourceIn + sourceOffsetAt(clip, firstDuration),
     duration: secondDuration,
-    keyframes: clip.keyframes.filter(k => k.time >= firstDuration).map(k => ({ ...k, id: createId('kf'), time: k.time - firstDuration })),
+    playbackRate: rateAtCut,
+    keyframes: futureFrames,
     effects: clip.effects.map(effect => ({ ...effect, id: createId('effect'), params: { ...effect.params } })),
     linkedClipId: undefined,
   };
@@ -129,6 +140,48 @@ export function evaluateKeyframes(keyframes: Keyframe[], property: string, time:
     case 'ease-in-out': t = linearT < 0.5 ? 2 * linearT * linearT : 1 - ((-2 * linearT + 2) ** 2) / 2; break;
   }
   return left.value + (right.value - left.value) * t;
+}
+
+function easingIntegral(easing: Keyframe['easing'], t: number): number {
+  const x = clamp(t, 0, 1);
+  switch (easing) {
+    case 'ease-in': return x ** 3 / 3;
+    case 'ease-out': return x * x - x ** 3 / 3;
+    case 'ease-in-out': return x < 0.5 ? (2 * x ** 3) / 3 : x - 0.5 + (2 * (1 - x) ** 3) / 3;
+    default: return x * x / 2;
+  }
+}
+
+/** Current playback speed, in source-media seconds per timeline second. */
+export function playbackRateAt(clip: Clip, localTime: number): number {
+  return clamp(evaluateKeyframes(clip.keyframes, 'playbackRate', Math.max(0, localTime), clip.playbackRate), 0.1, 4);
+}
+
+/** Map timeline time to source time by integrating the eased speed curve. */
+export function sourceOffsetAt(clip: Clip, localTime: number): number {
+  const time = Math.max(0, localTime);
+  const frames = clip.keyframes.filter(frame => frame.property === 'playbackRate').slice().sort((a, b) => a.time - b.time);
+  if (!frames.length) return time * clamp(clip.playbackRate, 0.1, 4);
+  const first = frames[0];
+  const firstRate = clamp(first.value, 0.1, 4);
+  if (time <= first.time) return time * firstRate;
+  let offset = Math.max(0, first.time) * firstRate;
+  for (let i = 0; i < frames.length - 1; i++) {
+    const left = frames[i], right = frames[i + 1];
+    const span = right.time - left.time;
+    if (span <= EPSILON) continue;
+    const from = Math.max(left.time, 0), to = Math.min(time, right.time);
+    if (to > from) {
+      const t0 = (from - left.time) / span, t1 = (to - left.time) / span;
+      const leftRate = clamp(left.value, 0.1, 4);
+      const delta = clamp(right.value, 0.1, 4) - leftRate;
+      offset += leftRate * (to - from) + delta * span * (easingIntegral(left.easing, t1) - easingIntegral(left.easing, t0));
+    }
+    if (time <= right.time) return offset;
+  }
+  const last = frames[frames.length - 1];
+  if (time > last.time) offset += (time - last.time) * clamp(last.value, 0.1, 4);
+  return offset;
 }
 
 export function withUpdatedClip(project: Project, clipId: string, patch: Partial<Clip>): Project {

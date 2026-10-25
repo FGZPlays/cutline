@@ -1,5 +1,5 @@
 import type { Clip, Effect, Project } from '../types';
-import { evaluateKeyframes, clipEnd } from './timeline.ts';
+import { evaluateKeyframes, clipEnd, playbackRateAt, sourceOffsetAt } from './timeline.ts';
 
 export type MediaElementMap = Map<string, HTMLVideoElement>;
 export type ImageElementMap = Map<string, HTMLImageElement>;
@@ -298,7 +298,7 @@ export function drawFrame(
   const active = project.clips
     .filter(clip => {
       const track = project.tracks.find(t => t.id === clip.trackId);
-      return (clip.kind === 'video' || clip.kind === 'image' || clip.kind === 'text') && clip.start <= time && clipEnd(clip) > time && !track?.hidden;
+      return (clip.kind === 'video' || clip.kind === 'image' || clip.kind === 'text' || clip.kind === 'adjustment') && clip.start <= time && clipEnd(clip) > time && !track?.hidden;
     })
     .sort((a, b) => (trackPosition.get(b.trackId) ?? 0) - (trackPosition.get(a.trackId) ?? 0));
 
@@ -313,6 +313,24 @@ export function drawFrame(
     const lctx = layer.getContext('2d');
     if (!lctx) continue;
     lctx.clearRect(0, 0, width, height);
+    if (clip.kind === 'adjustment') {
+      lctx.save();
+      lctx.filter = buildEffectFilter(clip, localTime);
+      lctx.drawImage(canvas, 0, 0, width, height);
+      lctx.restore();
+      applyPixelEffects(lctx, clip, localTime, width, height);
+      applyCropAndWipe(lctx, clip, localTime, width, height);
+      applyVignette(lctx, clip, localTime, width, height);
+      applyPixelate(lctx, clip, localTime, width, height);
+      ctx.save();
+      ctx.globalAlpha = visual.opacity;
+      ctx.translate(width * visual.x / 100, height * visual.y / 100);
+      ctx.rotate(visual.rotation * Math.PI / 180);
+      ctx.scale(visual.scale, visual.scale);
+      ctx.drawImage(layer, -width / 2, -height / 2, width, height);
+      ctx.restore();
+      continue;
+    }
     lctx.save(); lctx.filter = buildEffectFilter(clip, localTime);
     if (effectByType(clip, 'mirror-horizontal') || effectByType(clip, 'mirror-vertical')) {
       lctx.translate(width / 2, height / 2);
@@ -359,7 +377,9 @@ export function syncMediaToTime(project: Project, time: number, videoByClip: Med
     const track = project.tracks.find(t => t.id === clip.trackId);
     const element: HTMLMediaElement | undefined = clip.kind === 'video' ? videoByClip.get(clip.id) : audioByClip.get(clip.id);
     if (!element) continue;
-    if (element.playbackRate !== clip.playbackRate) element.playbackRate = clip.playbackRate;
+    const localTime = Math.max(0, time - clip.start);
+    const rate = playbackRateAt(clip, localTime);
+    if (Math.abs(element.playbackRate - rate) > 0.015) element.playbackRate = rate;
     const active = clip.start <= time && clipEnd(clip) > time;
     if (clip.kind === 'audio') {
       const audio = element as HTMLAudioElement;
@@ -382,7 +402,7 @@ export function syncMediaToTime(project: Project, time: number, videoByClip: Med
     if (!active || !playing || track?.muted && clip.kind === 'audio') {
       element.pause();
       if (active) {
-        const target = clip.sourceIn + (time - clip.start) * clip.playbackRate;
+        const target = clip.sourceIn + sourceOffsetAt(clip, Math.max(0, time - clip.start));
         if (Math.abs(element.currentTime - target) > 0.03 && Number.isFinite(target)) {
           try { element.currentTime = Math.max(0, target); } catch { /* wait for metadata */ }
         }

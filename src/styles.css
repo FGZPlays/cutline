@@ -28,3 +28,19 @@
 
 .effect-browser-row:disabled{opacity:.38;cursor:not-allowed}.effect-browser-row:disabled:hover{background:transparent;border-color:transparent}
 .brand-home-button{margin:0;background:transparent;border:0;padding:0;cursor:pointer;color:inherit;font:inherit;text-align:left}.brand-home-button:hover .brand-name{color:#fff}.brand-home-button:focus-visible{outline:1px solid #9db4c9;outline-offset:3px}
+
+
+/* Adjustment layers, editable track names, and slow-motion ramps */
+.track-label{gap:4px;padding:0 5px}
+.track-name{flex:1;min-width:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.track-name-input{width:46px;min-width:0;flex:1;height:20px;padding:0 3px;border:1px solid #61798a;border-radius:2px;background:#17191c;color:#eef3f6;font-size:10px;font-weight:600;outline:none}
+.track-reorder{width:14px;min-width:14px;height:17px;display:flex;align-items:center;justify-content:center;padding:0;border:1px solid transparent;border-radius:2px;background:transparent;color:#777e87}
+.track-reorder:hover:not(:disabled){background:#353a41;border-color:#4c525a;color:#d7dde2}
+.track-reorder:disabled{opacity:.25;cursor:not-allowed}
+.timeline-add-track{display:flex;align-items:center;justify-content:center;gap:2px;height:21px;padding:0 5px;margin-left:2px;border:1px solid #3a424a;border-radius:3px;background:#292d32;color:#a9b6c1}
+.timeline-add-track:hover{background:#39424b;color:#eef2f5;border-color:#56636f}
+.adjustment-clip{background:#4a3c59;border-color:#796397}
+.adjustment-clip .clip-header{background:#58466a}
+.adjustment-clip .clip-kind-mini{color:#dac5f1}
+.clip-type-icon.adjustment{background:#30283a;border-color:#59466c;color:#c7afe2}
+.speed-ramp-help{margin:4px 11px 9px;color:#858b93;font-size:9px;line-height:1.45}
