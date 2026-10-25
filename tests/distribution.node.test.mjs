@@ -37,7 +37,7 @@ test('electron-builder targets Windows installer, Debian, Fedora, and portable L
   assert.equal(pkg.dependencies['electron-updater'], '^6.8.11');
 });
 
-test('desktop wrapper hardens BrowserWindow and opens the editor route', () => {
+test('desktop wrapper hardens BrowserWindow and starts at the desktop home screen', () => {
   const main = read('../electron/main.cjs');
   assert.match(main, /contextIsolation:\s*true/);
   assert.match(main, /nodeIntegration:\s*false/);
@@ -55,7 +55,7 @@ test('website contains a working web-editor route and disabled installer links u
   assert.match(site, /Cutline-Setup-\$\{APP_VERSION\}\.exe/);
   assert.match(site, /Cutline-\$\{APP_VERSION\}-amd64\.deb/);
   assert.match(site, /Cutline-\$\{APP_VERSION\}-x86_64\.rpm/);
-  assert.match(bootstrap, /window\.location\.hash === '#\/editor'/);
+  assert.match(bootstrap, /route === '#\/editor' \|\| route\.startsWith\('#\/editor\?'\)/);
   assert.match(bootstrap, /addEventListener\('hashchange'/);
 });
 
