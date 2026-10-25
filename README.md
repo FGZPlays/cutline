@@ -13,10 +13,11 @@ The native Flutter app lives in [`native_app/`](./native_app/). On release tags,
 | Target | Build output | Build command |
 |---|---|---|
 | Website / browser editor | `dist/` static website | `npm run build` |
-| Windows 10+ x64 | `Cutline-Setup-0.4.2.exe` | `npm run dist:win` on Windows or the release workflow |
-| Debian / Ubuntu x64 | `Cutline-0.4.2-amd64.deb` | `npm run dist:linux` on Linux or the release workflow |
-| Fedora / RPM x64 | `Cutline-0.4.2-x86_64.rpm` | `npm run dist:linux` on Linux or the release workflow |
-| Portable Linux x64 | `Cutline-0.4.2-x86_64.AppImage` | `npm run dist:linux` on Linux or the release workflow |
+| Windows 10+ x64 | `Cutline-Setup-0.5.0.exe` | `npm run dist:win` on Windows or the release workflow |
+| Debian / Ubuntu x64 | `Cutline-0.5.0-amd64.deb` | `npm run dist:linux` on Linux or the release workflow |
+| Fedora / RPM x64 | `Cutline-0.5.0-x86_64.rpm` | `npm run dist:linux` on Linux or the release workflow |
+| Portable Linux x64 | `Cutline-0.5.0-x86_64.AppImage` | `npm run dist:linux` on Linux or the release workflow |
+| Android | `Cutline-0.5.0-android.apk` | `flutter build apk --release` in `native_app/` or the release workflow |
 
 Release filenames include the package version. Update `package.json` and the release tag together.
 
