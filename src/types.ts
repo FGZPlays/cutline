@@ -15,6 +15,11 @@ export interface Asset {
   thumbnail?: string;
   waveform?: number[];
   missing?: boolean;
+  /** Hidden local cache generated for motion-compensated smooth slow motion. */
+  hidden?: boolean;
+  generatedBy?: 'smooth-slow-mo';
+  originalAssetId?: string;
+  interpolationFps?: number;
 }
 
 export interface Track {
@@ -73,6 +78,8 @@ export interface Clip {
   gain: number;
   pan: number;
   playbackRate: number;
+  /** Points to locally generated motion-interpolated frames for slow playback. */
+  smoothSlowMoAssetId?: string;
   linkedClipId?: string;
 }
 
