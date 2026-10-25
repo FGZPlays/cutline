@@ -127,7 +127,9 @@ jobs:
       - name: Name Android APK
         if: matrix.target == 'android'
         shell: bash
-        run: cp native_app/build/app/outputs/flutter-apk/app-release.apk "Cutline-0.5.0-android.apk"
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          cp native_app/build/app/outputs/flutter-apk/app-release.apk "Cutline-${VERSION}-android.apk"
       - name: Upload native app artifact
         uses: actions/upload-artifact@v4
         with:
