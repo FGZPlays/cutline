@@ -104,7 +104,7 @@ class _EditorHomeState extends State<EditorHome> {
       _clips.removeAt(index);
       if (_clips.isEmpty) _selected = -1;
       else if (index < _selected) _selected--;
-      else if (wasSelected) _selected = index.clamp(0, _clips.length - 1);
+      else if (wasSelected) _selected = index.clamp(0, _clips.length - 1).toInt();
     });
     if (_selected >= 0 && (wasSelected || _clips.isNotEmpty)) {
       await _openClip(_selected);
@@ -201,7 +201,7 @@ class _EditorHomeState extends State<EditorHome> {
                   Container(width: 36, height: 36, decoration: BoxDecoration(color: raised, borderRadius: BorderRadius.circular(6)), child: Icon(_mediaIcon(clip.extension), size: 17, color: active ? accent : textMuted)),
                   const SizedBox(width: 9),
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(clip.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w650)),
+                    Text(clip.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 3),
                     Text(clip.extension, style: const TextStyle(color: textMuted, fontSize: 9, letterSpacing: .7)),
                   ])),
@@ -244,7 +244,7 @@ class _EditorHomeState extends State<EditorHome> {
           DropdownMenuItem(value: 2, child: Text('2×')),
         ], onChanged: (v) { if (v != null) _setSpeed(v); }),
         const Spacer(),
-        StreamBuilder<Duration>(stream: _player.stream.position, initialData: Duration.zero, builder: (context, snap) => Text(_time(snap.data ?? Duration.zero), style: const TextStyle(color: textMuted, fontSize: 10, fontFeatures: []))),
+        StreamBuilder<Duration>(stream: _player.stream.position, initialData: Duration.zero, builder: (context, snap) => Text(_time(snap.data ?? Duration.zero), style: const TextStyle(color: textMuted, fontSize: 10))),
       ])),
     ]),
   );
