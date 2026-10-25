@@ -103,6 +103,21 @@ jobs:
       - name: Generate native platform project files
         working-directory: native_app
         run: flutter create --platforms=${{ matrix.target }} --org com.cutline --project-name cutline_native .
+      - name: Set Android compile SDK to API 36
+        if: matrix.target == 'android'
+        working-directory: native_app
+        shell: bash
+        run: |
+          if [[ -f android/app/build.gradle.kts ]]; then
+            sed -i -E 's/^[[:space:]]*compileSdk[[:space:]]*=.*/    compileSdk = 36/' android/app/build.gradle.kts
+            grep -Eq '^[[:space:]]*compileSdk[[:space:]]*=[[:space:]]*36' android/app/build.gradle.kts
+          elif [[ -f android/app/build.gradle ]]; then
+            sed -i -E 's/^[[:space:]]*compileSdkVersion[[:space:]]+.*/    compileSdkVersion 36/' android/app/build.gradle
+            grep -Eq '^[[:space:]]*compileSdkVersion[[:space:]]+36' android/app/build.gradle
+          else
+            echo "Flutter did not generate an Android app Gradle file" >&2
+            exit 1
+          fi
       - name: Resolve Flutter packages
         working-directory: native_app
         run: flutter pub get
