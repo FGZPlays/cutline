@@ -57,6 +57,8 @@ test('website contains a working web-editor route and current platform downloads
   assert.match(site, /VITE_RELEASE_DOWNLOAD_BASE/);
   assert.match(site, /Cutline-Native-Windows-x64\.zip/);
   assert.match(site, /Cutline-Native-Linux-x64\.tar\.gz/);
+  assert.match(site, /Cutline-Setup-\$\{APP_VERSION\}\.exe/);
+  assert.match(site, /Cutline-\$\{APP_VERSION\}-amd64\.deb/);
   assert.match(site, /Cutline-\$\{APP_VERSION\}-x86_64\.rpm/);
   assert.match(site, /Cutline-\$\{APP_VERSION\}-android\.apk/);
   assert.match(site, /Cutline-\$\{APP_VERSION\}-x86_64\.AppImage/);
@@ -82,6 +84,9 @@ test('CI workflows build the website and publish desktop artifacts on a version 
   assert.match(release, /cutline-release-published/);
   assert.match(release, /dist:win/);
   assert.match(release, /dist:linux/);
+  assert.match(release, /flutter build apk --release/);
+  assert.match(release, /libasound2-dev/);
+  assert.match(release, /workflow_dispatch/);
   assert.match(release, /softprops\/action-gh-release/);
   assert.match(release, /pattern: cutline-\*/);
 });
