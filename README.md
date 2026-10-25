@@ -2,6 +2,8 @@
 
 Cutline is one React + TypeScript video-editor codebase delivered in two experiences: a public GitHub Pages website with the browser editor, and a standalone Electron desktop application. `#/editor` opens the actual editor; `/` is the Cutline product and downloads page.
 
+**Smooth slow-motion:** video clips have a separate Smooth slow-mo option using FFmpeg's motion-compensated `minterpolate` filter to generate intermediate frames locally. This is different from eased speed ramps. The browser processor currently accepts source clips up to 256 MiB and targets up to 120 fps; motion compensation can use substantial CPU and memory and may show artifacts around fast or occluded motion. It is motion-compensated interpolation, not a neural AI frame generator. The original source is retained and generated video is stored as a hidden local cache asset. The FFmpeg WebAssembly core is licensed under GPL-2.0-or-later; see the upstream [ffmpeg.wasm project](https://github.com/ffmpegwasm/ffmpeg.wasm).
+
 **Current editor scope:** Cutline is an early nonlinear editor, not yet a full Premiere Pro replacement. Read [`FEATURE_STATUS.md`](./FEATURE_STATUS.md) for tested, partial, and unfinished functionality. Browser export currently uses real-time MediaRecorder rather than a deterministic offline FFmpeg/WebCodecs renderer.
 
 ## Experiences and installers
