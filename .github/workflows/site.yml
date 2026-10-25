@@ -39,7 +39,29 @@ jobs:
           if RELEASE_JSON="$(curl --fail --silent --show-error -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases/latest")"; then
             LATEST_RELEASE_TAG="$(printf '%s' "$RELEASE_JSON" | node -e "let input=''; process.stdin.on('data', chunk => input += chunk); process.stdin.on('end', () => { try { console.log(JSON.parse(input).tag_name || '') } catch { console.log('') } });")"
             if [[ "$LATEST_RELEASE_TAG" == "v$PACKAGE_VERSION" ]]; then
-              echo "VITE_RELEASE_DOWNLOAD_BASE=https://github.com/${GITHUB_REPOSITORY}/releases/latest/download" >> "$GITHUB_ENV"
+              REQUIRED_ASSETS_PRESENT="$(printf '%s' "$RELEASE_JSON" | PACKAGE_VERSION="$PACKAGE_VERSION" node -e '
+                let input = "";
+                process.stdin.on("data", chunk => input += chunk);
+                process.stdin.on("end", () => {
+                  const release = JSON.parse(input);
+                  const available = new Set((release.assets || []).map(asset => asset.name));
+                  const version = process.env.PACKAGE_VERSION;
+                  const required = [
+                    "Cutline-Setup-" + version + ".exe",
+                    "Cutline-" + version + "-amd64.deb",
+                    "Cutline-" + version + "-x86_64.rpm",
+                    "Cutline-" + version + "-x86_64.AppImage",
+                    "Cutline-" + version + "-android.apk"
+                  ];
+                  console.log(required.every(name => available.has(name)) ? "yes" : "no");
+                });
+              ')"
+              if [[ "$REQUIRED_ASSETS_PRESENT" == "yes" ]]; then
+                echo "VITE_RELEASE_DOWNLOAD_BASE=https://github.com/${GITHUB_REPOSITORY}/releases/latest/download" >> "$GITHUB_ENV"
+              else
+                echo "VITE_RELEASE_DOWNLOAD_BASE=" >> "$GITHUB_ENV"
+                echo "Release v$PACKAGE_VERSION exists but one or more required installer assets are missing; keeping download links disabled."
+              fi
             else
               echo "VITE_RELEASE_DOWNLOAD_BASE=" >> "$GITHUB_ENV"
               echo "Latest release ($LATEST_RELEASE_TAG) does not match app version v$PACKAGE_VERSION; keeping installers disabled until the matching release is published."
