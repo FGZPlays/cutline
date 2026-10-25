@@ -4,7 +4,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
 const isDevelopment = !app.isPackaged;
-const devUrl = process.env.CUTLINE_DEV_URL || 'http://127.0.0.1:5173/#/editor';
+const devUrl = process.env.CUTLINE_DEV_URL || 'http://127.0.0.1:5173/?cutline-desktop=1#/desktop-home';
 let mainWindow;
 
 function openExternalSafely(rawUrl) {
@@ -61,7 +61,7 @@ function createWindow() {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
     const indexFile = path.join(app.getAppPath(), 'dist', 'index.html');
-    void mainWindow.loadURL(`${pathToFileURL(indexFile).href}#/editor`);
+    void mainWindow.loadURL(`${pathToFileURL(indexFile).href}?cutline-desktop=1#/desktop-home`);
   }
 }
 

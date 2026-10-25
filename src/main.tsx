@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
+import DesktopHome from './DesktopHome';
 import Site from './Site';
 import './styles.css';
 import './site.css';
@@ -31,15 +32,20 @@ class AppErrorBoundary extends React.Component<React.PropsWithChildren, { error:
 }
 
 function CutlineRouter() {
-  const [isEditor, setIsEditor] = useState(() => window.location.hash === '#/editor');
+  const [route, setRoute] = useState(() => window.location.hash);
+  const isDesktop = window.location.protocol === 'file:' ||
+    new URLSearchParams(window.location.search).get('cutline-desktop') === '1';
 
   useEffect(() => {
-    const syncRoute = () => setIsEditor(window.location.hash === '#/editor');
+    const syncRoute = () => setRoute(window.location.hash);
     window.addEventListener('hashchange', syncRoute);
     return () => window.removeEventListener('hashchange', syncRoute);
   }, []);
 
-  return isEditor ? <App /> : <Site />;
+  const isEditor = route === '#/editor' || route.startsWith('#/editor?');
+  if (isEditor) return <App />;
+  if (isDesktop && (route === '#/desktop-home' || route.startsWith('#/desktop-home?'))) return <DesktopHome />;
+  return <Site />;
 }
 
 const rootElement = document.getElementById('root');

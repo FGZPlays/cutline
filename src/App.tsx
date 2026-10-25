@@ -54,6 +54,11 @@ function effectDefaults(type: EffectType): Effect {
 }
 
 export default function App() {
+  const [launchRequest] = useState(() => {
+    const query = window.location.hash.split('?')[1] ?? '';
+    const params = new URLSearchParams(query);
+    return { projectId: params.get('project'), startFresh: params.get('new') === '1' };
+  });
   const [project, setProject] = useState<Project>(() => newProject());
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
@@ -133,25 +138,38 @@ export default function App() {
   }, [project, commitProject]);
 
   useEffect(() => {
+    // Strip one-shot launch arguments after the editor has captured them.
+    if (window.location.hash.includes('?')) window.location.hash = '#/editor';
+  }, []);
+
+  useEffect(() => {
     let canceled = false;
     (async () => {
       try {
         const existing = await listProjects();
         if (canceled) return;
         setProjects(existing);
-        if (existing.length) {
-          const latest = existing[0];
-          setProject(latest);
-          const blobs = await importAssetBlobs(latest.assets);
+        const initialProject = launchRequest.startFresh
+          ? undefined
+          : launchRequest.projectId
+            ? existing.find(item => item.id === launchRequest.projectId)
+            : existing[0];
+        if (initialProject) {
+          setProject(initialProject);
+          const blobs = await importAssetBlobs(initialProject.assets);
           if (canceled) return;
           const nextUrls = new Map<string, string>();
-          for (const asset of latest.assets) {
+          for (const asset of initialProject.assets) {
             const blob = blobs.get(asset.id);
             if (blob) nextUrls.set(asset.id, URL.createObjectURL(blob));
           }
           setUrls(nextUrls);
-          setNotice(`Restored ${latest.name}`);
-          if (latest.assets.some(asset => !blobs.has(asset.id))) setNotice('Some media is missing — relink it from the Project panel');
+          setNotice('Restored ' + initialProject.name);
+          if (initialProject.assets.some(asset => !blobs.has(asset.id))) {
+            setNotice('Some media is missing — relink it from the Project panel');
+          }
+        } else if (launchRequest.projectId) {
+          setNotice('That saved project could not be found. Return to the home screen to choose another.');
         }
         setStorageInfo(await estimateStorage());
       } catch {
@@ -971,7 +989,7 @@ export default function App() {
   return (
     <div className="app-shell" style={{ gridTemplateRows: `42px 38px minmax(220px,1fr) 5px ${timelineHeight}px 24px` }} onContextMenu={openContextMenu} onClick={() => { if (contextMenu) setContextMenu(null); }} onDragOver={event => event.preventDefault()} onDrop={event => { if (event.dataTransfer.files.length) { event.preventDefault(); void importFiles(event.dataTransfer.files); } }}>
       <header className="topbar">
-        <button className="brand-lockup brand-home-button" onClick={() => { window.location.hash = ''; }} title="Back to Cutline website" aria-label="Back to Cutline website"><div className="brand-mark"><span /><span /><span /></div><span className="brand-name">cutline</span><span className="brand-divider" /><span className="brand-workspace">EDITOR</span></button>
+        <button className="brand-lockup brand-home-button" onClick={() => { const desktop = window.location.protocol === 'file:' || new URLSearchParams(window.location.search).get('cutline-desktop') === '1'; window.location.hash = desktop ? '#/desktop-home' : ''; }} title="Back to Cutline website" aria-label="Back to Cutline website"><div className="brand-mark"><span /><span /><span /></div><span className="brand-name">cutline</span><span className="brand-divider" /><span className="brand-workspace">EDITOR</span></button>
         <nav className="menubar" aria-label="Application menu">
           <div className="menu-wrap"><button className="menu-trigger">File <ChevronDown size={12} /></button><div className="menu-popover"><button onClick={newProjectAction}>New Project <span>Ctrl+N</span></button><button onClick={() => void openProjectAction()}>Open Local Project…</button><button onClick={() => fileInputRef.current?.click()}>Import Media…</button><button onClick={() => projectInputRef.current?.click()}>Open Project File…</button><hr /><button onClick={() => void saveNow()}>Save Project <span>Ctrl+S</span></button><button onClick={exportProjectFile}>Export Project File…</button><button onClick={() => setShowExport(true)}>Export Sequence…</button></div></div>
           <div className="menu-wrap"><button className="menu-trigger">Edit <ChevronDown size={12} /></button><div className="menu-popover"><button onClick={undo}>Undo <span>Ctrl+Z</span></button><button onClick={redo}>Redo <span>Ctrl+Y</span></button><button onClick={() => copySelected(false)}>Copy <span>Ctrl+C</span></button><button onClick={() => copySelected(true)}>Cut <span>Ctrl+X</span></button><button onClick={pasteClipboard}>Paste <span>Ctrl+V</span></button><button onClick={() => { if (selectedClipId) { const duplicated = duplicateClipGroup(project.clips, selectedClipId); commitProject({ ...project, clips: duplicated.clips }, duplicated.selectedId); } }}>Duplicate Clip <span>Ctrl+D</span></button><button onClick={() => deleteSelected(true)}>Ripple Delete <span>Delete</span></button></div></div>

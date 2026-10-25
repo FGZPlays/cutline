@@ -22,7 +22,7 @@ try {
     server: { host: '127.0.0.1', port: 5173, strictPort: true, open: false },
   });
   await viteServer.listen();
-  const url = 'http://127.0.0.1:5173/#/editor';
+  const url = 'http://127.0.0.1:5173/?cutline-desktop=1#/desktop-home';
   console.log(`Cutline desktop development window → ${url}`);
   electronProcess = spawn(electronExecutable, ['.'], {
     stdio: 'inherit',
