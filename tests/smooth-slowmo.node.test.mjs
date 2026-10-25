@@ -16,8 +16,9 @@ test('motion interpolation target follows the slowest speed ramp', () => {
   assert.equal(smoothSlowMoTargetFps(clip(0.5), 60), 120);
 });
 
-test('interpolation preserves already high-frame-rate sources', () => {
-  assert.equal(smoothSlowMoTargetFps(clip(0.5), 30, 120), 120);
+test('interpolation target stays bounded between 60 and 120 fps', () => {
+  assert.equal(smoothSlowMoTargetFps(clip(0.5), 30), 60);
+  assert.equal(smoothSlowMoTargetFps(clip(0.1), 30), 120);
 });
 
 test('very slow speeds report when the 120 fps processing cap is insufficient', () => {
