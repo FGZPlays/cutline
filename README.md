@@ -9,10 +9,10 @@ Cutline is one React + TypeScript video-editor codebase delivered in two experie
 | Target | Build output | Build command |
 |---|---|---|
 | Website / browser editor | `dist/` static website | `npm run build` |
-| Windows 10+ x64 | `Cutline-Setup-0.4.1.exe` | `npm run dist:win` on Windows or the release workflow |
-| Debian / Ubuntu x64 | `Cutline-0.4.1-amd64.deb` | `npm run dist:linux` on Linux or the release workflow |
-| Fedora / RPM x64 | `Cutline-0.4.1-x86_64.rpm` | `npm run dist:linux` on Linux or the release workflow |
-| Portable Linux x64 | `Cutline-0.4.1-x86_64.AppImage` | `npm run dist:linux` on Linux or the release workflow |
+| Windows 10+ x64 | `Cutline-Setup-0.4.2.exe` | `npm run dist:win` on Windows or the release workflow |
+| Debian / Ubuntu x64 | `Cutline-0.4.2-amd64.deb` | `npm run dist:linux` on Linux or the release workflow |
+| Fedora / RPM x64 | `Cutline-0.4.2-x86_64.rpm` | `npm run dist:linux` on Linux or the release workflow |
+| Portable Linux x64 | `Cutline-0.4.2-x86_64.AppImage` | `npm run dist:linux` on Linux or the release workflow |
 
 Release filenames include the package version. Update `package.json` and the release tag together.
 
@@ -72,22 +72,22 @@ The Windows and Linux packages are built on their native CI runners by design. A
 
 ## Publish the website and download releases
 
-The v0.4.0 release attempt failed on Linux packaging because Debian/RPM metadata had no maintainer email. v0.4.1 adds the required package author and maintainer metadata. Push the matching v0.4.1 tag to build and publish a fresh release.
+The v0.4.1 release established the Windows and Linux installer packages and required Linux maintainer metadata. v0.4.2 adds the desktop auto-updater. The v0.4.1 installers were built before the updater existed, so users must install v0.4.2 once manually; after that, packaged desktop builds can download newer releases automatically.
 
 The repository includes two GitHub Actions workflows:
 
 - `.github/workflows/site.yml` builds and deploys the website/editor to GitHub Pages on pushes to `main`, and refreshes the download links after a release is published. It checks whether a latest release exists so installer buttons remain disabled until real release files are available.
-- `.github/workflows/release.yml` creates the Windows installer, Debian package, Fedora RPM, and Linux AppImage when a `v*` tag is pushed, then attaches them to a GitHub Release.
+- `.github/workflows/release.yml` creates the Windows installer, Debian package, Fedora RPM, and Linux AppImage when a `v*` tag is pushed, attaches the installer files plus `latest.yml` / `latest-linux.yml` update manifests to a GitHub Release, and refreshes the website links.
 
 To activate them:
 
 1. Open **Settings → Pages** in the GitHub repository and set **Build and deployment → Source** to **GitHub Actions**.
 2. Push the website code to `main`; the Actions workflow builds and deploys the site.
-3. Check `package.json` version (currently `0.4.1`), then create and push the matching release tag:
+3. Check `package.json` version (currently `0.4.2`), then create and push the matching release tag:
 
    ```bash
-   git tag v0.4.1
-   git push origin v0.4.1
+   git tag v0.4.2
+   git push origin v0.4.2
    ```
 
 4. Wait for the **Build Cutline desktop installers** workflow to finish successfully. It builds on Windows and Ubuntu runners and publishes release assets. The website is configured by CI to link to `https://github.com/OWNER/REPOSITORY/releases/latest/download` automatically using the actual repository name.

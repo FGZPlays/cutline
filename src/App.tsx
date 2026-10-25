@@ -4,10 +4,10 @@ import {
   Copy, Download, Film, FolderOpen, Gauge, Grid2X2, Image as ImageIcon, Import, Layers, Lock, Magnet,
   Maximize2, MoreHorizontal, Music2, Pause, Play, Plus, Redo2, RotateCcw, Save, Scissors, Search,
   Settings2, SkipBack, SkipForward, SlidersHorizontal, Sparkles, Square, Trash2, Type, Undo2, Unlock,
-  Video, Volume2, VolumeX, Wand2, X, Eye, EyeOff, ChevronLeft, FileVideo, MousePointer2, Crosshair,
+  Video, Volume2, VolumeX, Wand2, X, Eye, EyeOff, ChevronLeft, ChevronUp, FileVideo, MousePointer2, Crosshair,
 } from 'lucide-react';
 import type { Asset, Clip, Effect, EffectType, Keyframe, Project, SequenceSettings, Track } from './types';
-import { createId, duplicateClipGroup, evaluateKeyframes, makeClip, makeDefaultTracks, moveClip, rippleDelete, sequenceDuration, snapTime, splitClip, withUpdatedClip } from './lib/timeline';
+import { createId, duplicateClipGroup, evaluateKeyframes, makeClip, makeDefaultTracks, moveClip, playbackRateAt, rippleDelete, sequenceDuration, snapTime, sourceOffsetAt, splitClip, withUpdatedClip } from './lib/timeline';
 import { classifyFile, makeAsset } from './lib/media';
 import { estimateStorage, getAssetBlob, getProject, importAssetBlobs, listProjects, saveProject, storeAssetBlob } from './lib/storage';
 import { animatedEffectParam, drawFrame, supportedRecordingMimeType, syncMediaToTime } from './lib/rendering';
@@ -54,6 +54,11 @@ function effectDefaults(type: EffectType): Effect {
 }
 
 export default function App() {
+  const [launchRequest] = useState(() => {
+    const query = window.location.hash.split('?')[1] ?? '';
+    const params = new URLSearchParams(query);
+    return { projectId: params.get('project'), startFresh: params.get('new') === '1' };
+  });
   const [project, setProject] = useState<Project>(() => newProject());
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
@@ -92,6 +97,8 @@ export default function App() {
   const resizeDragRef = useRef<ResizeDrag | null>(null);
   const [storageInfo, setStorageInfo] = useState<{ usage?: number; quota?: number }>({});
   const [searchEffect, setSearchEffect] = useState('');
+  const [renamingTrackId, setRenamingTrackId] = useState<string | null>(null);
+  const [trackNameDraft, setTrackNameDraft] = useState('');
   const [clipboard, setClipboard] = useState<Clip[] | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const effectDragStartRef = useRef<Project | null>(null);
@@ -131,25 +138,38 @@ export default function App() {
   }, [project, commitProject]);
 
   useEffect(() => {
+    // Strip one-shot launch arguments after the editor has captured them.
+    if (window.location.hash.includes('?')) window.location.hash = '#/editor';
+  }, []);
+
+  useEffect(() => {
     let canceled = false;
     (async () => {
       try {
         const existing = await listProjects();
         if (canceled) return;
         setProjects(existing);
-        if (existing.length) {
-          const latest = existing[0];
-          setProject(latest);
-          const blobs = await importAssetBlobs(latest.assets);
+        const initialProject = launchRequest.startFresh
+          ? undefined
+          : launchRequest.projectId
+            ? existing.find(item => item.id === launchRequest.projectId)
+            : existing[0];
+        if (initialProject) {
+          setProject(initialProject);
+          const blobs = await importAssetBlobs(initialProject.assets);
           if (canceled) return;
           const nextUrls = new Map<string, string>();
-          for (const asset of latest.assets) {
+          for (const asset of initialProject.assets) {
             const blob = blobs.get(asset.id);
             if (blob) nextUrls.set(asset.id, URL.createObjectURL(blob));
           }
           setUrls(nextUrls);
-          setNotice(`Restored ${latest.name}`);
-          if (latest.assets.some(asset => !blobs.has(asset.id))) setNotice('Some media is missing — relink it from the Project panel');
+          setNotice('Restored ' + initialProject.name);
+          if (initialProject.assets.some(asset => !blobs.has(asset.id))) {
+            setNotice('Some media is missing — relink it from the Project panel');
+          }
+        } else if (launchRequest.projectId) {
+          setNotice('That saved project could not be found. Return to the home screen to choose another.');
         }
         setStorageInfo(await estimateStorage());
       } catch {
@@ -267,7 +287,7 @@ export default function App() {
       let draft: Clip;
       if (current.mode === 'left') {
         const consumed = Math.max(-current.original.start, Math.min(current.original.duration - 0.05, delta));
-        draft = { ...current.original, start: current.original.start + consumed, sourceIn: Math.max(0, current.original.sourceIn + consumed * current.original.playbackRate), duration: current.original.duration - consumed };
+        draft = { ...current.original, start: current.original.start + consumed, sourceIn: Math.max(0, current.original.sourceIn + (consumed >= 0 ? sourceOffsetAt(current.original, consumed) : consumed * current.original.playbackRate)), duration: current.original.duration - consumed };
       } else {
         draft = { ...current.original, duration: Math.max(0.05, current.original.duration + delta) };
       }
@@ -550,7 +570,26 @@ export default function App() {
     commitProject({ ...project, markers: [...project.markers, marker] });
   };
 
+  const createAdjustmentLayer = (type: EffectType, preferredTrackId?: string, atTime = playheadRef.current) => {
+    let tracks = project.tracks;
+    let track = tracks.find(item => item.id === preferredTrackId && item.kind === 'video' && !item.locked)
+      ?? tracks.find(item => item.kind === 'video' && !item.locked);
+    if (!track) {
+      track = { id: createId('track'), name: `V${tracks.filter(item => item.kind === 'video').length + 1}`, kind: 'video', muted: false, hidden: false, locked: false };
+      tracks = [track, ...tracks];
+    }
+    const clip = makeClip({ trackId: track.id, name: `${getEffectLabel(type)} Layer`, kind: 'adjustment', start: Math.max(0, atTime), duration: 5, effects: [effectDefaults(type)] });
+    commitProject({ ...project, tracks, clips: [...project.clips, clip] }, clip.id);
+    setSelectedAssetId(null);
+    setActivePanel('media');
+    setNotice(`${getEffectLabel(type)} adjustment layer added — drag it to position or trim it`);
+  };
+
   const addEffect = (type: EffectType) => {
+    if (!selectedClip && !selectedAsset) {
+      createAdjustmentLayer(type);
+      return;
+    }
     let targetClip = selectedClip;
     if (!targetClip && selectedAsset) {
       const audioEffect = ['fade-in', 'fade-out', 'cross-dissolve'].includes(type);
@@ -607,15 +646,31 @@ export default function App() {
     effectDragStartRef.current = null;
   };
 
+  const setSpeedRamp = (clipId: string, rate: number) => {
+    const target = project.clips.find(clip => clip.id === clipId);
+    if (!target || (target.kind !== 'video' && target.kind !== 'audio')) return;
+    const time = Math.max(0, Math.min(target.duration, playheadRef.current - target.start));
+    const hasRamp = target.keyframes.some(frame => frame.property === 'playbackRate');
+    let keyframes = target.keyframes.filter(frame => !(frame.property === 'playbackRate' && Math.abs(frame.time - time) < 0.0001));
+    if (!hasRamp && time > 0.0001) keyframes.push({ id: createId('kf'), property: 'playbackRate', time: 0, value: target.playbackRate, easing: 'ease-in-out' });
+    keyframes.push({ id: createId('kf'), property: 'playbackRate', time, value: Math.min(4, Math.max(0.1, rate)), easing: 'ease-in-out' });
+    replaceClip(clipId, { keyframes });
+    setNotice(`Smooth speed ramp set to ${rate.toFixed(2)}× at ${time.toFixed(2)}s`);
+  };
+
   const addKeyframe = (property: string) => {
     if (!selectedClip) return;
     const current = playheadRef.current - selectedClip.start;
     const time = Math.max(0, Math.min(selectedClip.duration, current));
     const effectMatch = property.match(/^effect:([^:]+):(.+)$/);
     const effectForKeyframe = effectMatch ? selectedClip.effects.find(effect => effect.id === effectMatch[1]) : undefined;
-    const value = property === 'x' ? selectedClip.x : property === 'y' ? selectedClip.y : property === 'scale' ? selectedClip.scale : property === 'rotation' ? selectedClip.rotation : property === 'opacity' ? selectedClip.opacity : property === 'gain' ? selectedClip.gain : effectForKeyframe ? animatedEffectParam(selectedClip, effectForKeyframe, effectMatch![2], time, Number(effectForKeyframe.params[effectMatch![2]] ?? 0)) : Number(selectedClip.effects.find(e => property.startsWith(`${e.type}.`))?.params[property.split('.')[1]] ?? 0);
-    const frame: Keyframe = { id: createId('kf'), property, time, value, easing: 'linear' };
-    replaceClip(selectedClip.id, { keyframes: [...selectedClip.keyframes.filter(k => !(k.property === property && Math.abs(k.time - time) < 0.0001)), frame] });
+    const value = property === 'x' ? selectedClip.x : property === 'y' ? selectedClip.y : property === 'scale' ? selectedClip.scale : property === 'rotation' ? selectedClip.rotation : property === 'opacity' ? selectedClip.opacity : property === 'gain' ? selectedClip.gain : property === 'playbackRate' ? playbackRateAt(selectedClip, time) : effectForKeyframe ? animatedEffectParam(selectedClip, effectForKeyframe, effectMatch![2], time, Number(effectForKeyframe.params[effectMatch![2]] ?? 0)) : Number(selectedClip.effects.find(e => property.startsWith(`${e.type}.`))?.params[property.split('.')[1]] ?? 0);
+    const frame: Keyframe = { id: createId('kf'), property, time, value, easing: property === 'playbackRate' ? 'ease-in-out' : 'linear' };
+    let frames = selectedClip.keyframes.filter(k => !(k.property === property && Math.abs(k.time - time) < 0.0001));
+    if (property === 'playbackRate' && time > 0.0001 && !frames.some(k => k.property === property)) {
+      frames.push({ id: createId('kf'), property: 'playbackRate', time: 0, value: selectedClip.playbackRate, easing: 'ease-in-out' });
+    }
+    replaceClip(selectedClip.id, { keyframes: [...frames, frame] });
     setNotice(`Keyframe added for ${property}`);
   };
 
@@ -816,10 +871,15 @@ export default function App() {
     event.preventDefault();
     const clipPayload = event.dataTransfer.getData('application/x-cutline-clip');
     const assetPayload = event.dataTransfer.getData('application/x-cutline-asset');
+    const effectPayload = event.dataTransfer.getData('application/x-cutline-effect');
     const rect = event.currentTarget.getBoundingClientRect();
     const time = Math.max(0, (event.clientX - rect.left) / zoom);
     if (clipPayload) moveClipTo(clipPayload, track.id, time);
     else if (assetPayload) addAssetToTimeline(assetPayload, track.id, time);
+    else if (effectPayload && EFFECT_CATALOG.some(effect => effect.type === effectPayload)) {
+      if (track.kind !== 'video') { setNotice('Drop visual effects onto a video layer'); return; }
+      createAdjustmentLayer(effectPayload as EffectType, track.id, time);
+    }
   };
 
   const handleLaneClick = (event: React.MouseEvent<HTMLDivElement>, track: Track) => {
@@ -830,6 +890,37 @@ export default function App() {
       if (clip) splitAtPlayhead(clip.id);
       else setPlayhead(time);
     } else setPlayhead(time);
+  };
+
+  const addTrack = (kind: 'video' | 'audio') => {
+    const count = project.tracks.filter(track => track.kind === kind).length;
+    const track: Track = { id: createId('track'), name: `${kind === 'video' ? 'V' : 'A'}${count + 1}`, kind, muted: false, hidden: false, locked: false };
+    const tracks = kind === 'video' ? [track, ...project.tracks] : [...project.tracks, track];
+    commitProject({ ...project, tracks });
+    setNotice(`Added layer ${track.name}`);
+  };
+
+  const canMoveTrack = (trackId: string, direction: -1 | 1) => {
+    const index = project.tracks.findIndex(track => track.id === trackId);
+    const other = project.tracks[index + direction];
+    return index >= 0 && Boolean(other) && other.kind === project.tracks[index].kind;
+  };
+
+  const moveTrack = (trackId: string, direction: -1 | 1) => {
+    const index = project.tracks.findIndex(track => track.id === trackId);
+    const other = index + direction;
+    if (index < 0 || other < 0 || other >= project.tracks.length) return;
+    if (project.tracks[index].kind !== project.tracks[other].kind) return;
+    const tracks = [...project.tracks];
+    [tracks[index], tracks[other]] = [tracks[other], tracks[index]];
+    commitProject({ ...project, tracks });
+    setNotice('Layer order updated');
+  };
+
+  const finishTrackRename = (trackId: string, nextName: string) => {
+    const name = nextName.trim();
+    if (name) commitProject({ ...project, tracks: project.tracks.map(track => track.id === trackId ? { ...track, name: name.slice(0, 40) } : track) });
+    setRenamingTrackId(null);
   };
 
   const toggleTrackFlag = (trackId: string, flag: 'muted' | 'hidden' | 'locked') => {
@@ -898,7 +989,7 @@ export default function App() {
   return (
     <div className="app-shell" style={{ gridTemplateRows: `42px 38px minmax(220px,1fr) 5px ${timelineHeight}px 24px` }} onContextMenu={openContextMenu} onClick={() => { if (contextMenu) setContextMenu(null); }} onDragOver={event => event.preventDefault()} onDrop={event => { if (event.dataTransfer.files.length) { event.preventDefault(); void importFiles(event.dataTransfer.files); } }}>
       <header className="topbar">
-        <button className="brand-lockup brand-home-button" onClick={() => { window.location.hash = ''; }} title="Back to Cutline website" aria-label="Back to Cutline website"><div className="brand-mark"><span /><span /><span /></div><span className="brand-name">cutline</span><span className="brand-divider" /><span className="brand-workspace">EDITOR</span></button>
+        <button className="brand-lockup brand-home-button" onClick={() => { const desktop = window.location.protocol === 'file:' || new URLSearchParams(window.location.search).get('cutline-desktop') === '1'; window.location.hash = desktop ? '#/desktop-home' : ''; }} title="Back to Cutline website" aria-label="Back to Cutline website"><div className="brand-mark"><span /><span /><span /></div><span className="brand-name">cutline</span><span className="brand-divider" /><span className="brand-workspace">EDITOR</span></button>
         <nav className="menubar" aria-label="Application menu">
           <div className="menu-wrap"><button className="menu-trigger">File <ChevronDown size={12} /></button><div className="menu-popover"><button onClick={newProjectAction}>New Project <span>Ctrl+N</span></button><button onClick={() => void openProjectAction()}>Open Local Project…</button><button onClick={() => fileInputRef.current?.click()}>Import Media…</button><button onClick={() => projectInputRef.current?.click()}>Open Project File…</button><hr /><button onClick={() => void saveNow()}>Save Project <span>Ctrl+S</span></button><button onClick={exportProjectFile}>Export Project File…</button><button onClick={() => setShowExport(true)}>Export Sequence…</button></div></div>
           <div className="menu-wrap"><button className="menu-trigger">Edit <ChevronDown size={12} /></button><div className="menu-popover"><button onClick={undo}>Undo <span>Ctrl+Z</span></button><button onClick={redo}>Redo <span>Ctrl+Y</span></button><button onClick={() => copySelected(false)}>Copy <span>Ctrl+C</span></button><button onClick={() => copySelected(true)}>Cut <span>Ctrl+X</span></button><button onClick={pasteClipboard}>Paste <span>Ctrl+V</span></button><button onClick={() => { if (selectedClipId) { const duplicated = duplicateClipGroup(project.clips, selectedClipId); commitProject({ ...project, clips: duplicated.clips }, duplicated.selectedId); } }}>Duplicate Clip <span>Ctrl+D</span></button><button onClick={() => deleteSelected(true)}>Ripple Delete <span>Delete</span></button></div></div>
@@ -964,19 +1055,23 @@ export default function App() {
         <aside className="panel inspector-panel">
           <div className="inspector-tabs"><button className={activePanel === 'media' ? 'active' : ''} onClick={() => setActivePanel('media')}><SlidersHorizontal size={13} /> PROPERTIES</button><button className={activePanel === 'effects' ? 'active' : ''} onClick={() => setActivePanel('effects')}><Wand2 size={13} /> EFFECTS</button></div>
           {activePanel === 'media' ? <div className="inspector-scroll">{selectedClip ? <>
-            <div className="inspector-clip-header"><div className={`clip-type-icon ${selectedClip.kind}`}><span>{selectedClip.kind === 'video' ? <Video size={16} /> : selectedClip.kind === 'audio' ? <Music2 size={16} /> : selectedClip.kind === 'text' ? <Type size={16} /> : <ImageIcon size={16} />}</span></div><div className="inspector-clip-title"><strong>{selectedClip.name}</strong><span>{selectedClip.kind.toUpperCase()} CLIP</span></div><button className="subtle-icon" title="Delete selected clip" onClick={() => deleteSelected(false)}><Trash2 size={14} /></button></div>
-            <InspectorSection title="TRANSFORM" icon={<Maximize2 size={13} />}>
+            <div className="inspector-clip-header"><div className={`clip-type-icon ${selectedClip.kind}`}><span>{selectedClip.kind === 'adjustment' ? <Layers size={16} /> : selectedClip.kind === 'video' ? <Video size={16} /> : selectedClip.kind === 'audio' ? <Music2 size={16} /> : selectedClip.kind === 'text' ? <Type size={16} /> : <ImageIcon size={16} />}</span></div><div className="inspector-clip-title"><strong>{selectedClip.name}</strong><span>{selectedClip.kind === 'adjustment' ? 'ADJUSTMENT LAYER' : `${selectedClip.kind.toUpperCase()} CLIP`}</span></div><button className="subtle-icon" title="Delete selected clip" onClick={() => deleteSelected(false)}><Trash2 size={14} /></button></div>
+            {selectedClip.kind !== 'adjustment' && <InspectorSection title="TRANSFORM" icon={<Maximize2 size={13} />}>
               <NumberControl label="Position X" value={selectedClip.x} min={-100} max={200} step={1} onChange={v => replaceClip(selectedClip.id, { x: v })} keyframe={() => addKeyframe('x')} />
               <NumberControl label="Position Y" value={selectedClip.y} min={-100} max={200} step={1} onChange={v => replaceClip(selectedClip.id, { y: v })} keyframe={() => addKeyframe('y')} />
               <NumberControl label="Scale" value={selectedClip.scale} min={0.05} max={5} step={0.05} onChange={v => replaceClip(selectedClip.id, { scale: v })} keyframe={() => addKeyframe('scale')} />
               <NumberControl label="Rotation" value={selectedClip.rotation} min={-360} max={360} step={1} suffix="°" onChange={v => replaceClip(selectedClip.id, { rotation: v })} keyframe={() => addKeyframe('rotation')} />
               <NumberControl label="Opacity" value={selectedClip.opacity} min={0} max={1} step={0.05} onChange={v => replaceClip(selectedClip.id, { opacity: v })} keyframe={() => addKeyframe('opacity')} />
-            </InspectorSection>
+            </InspectorSection>}
             <InspectorSection title="TIMING" icon={<Activity size={13} />}>
               <NumberControl label="Start" value={selectedClip.start} min={0} max={9999} step={0.1} suffix="s" onChange={v => replaceClip(selectedClip.id, { start: v })} />
-              <NumberControl label="Source In" value={selectedClip.sourceIn} min={0} max={99999} step={0.1} suffix="s" onChange={v => replaceClip(selectedClip.id, { sourceIn: v })} />
+              {selectedClip.kind !== 'adjustment' && <NumberControl label="Source In" value={selectedClip.sourceIn} min={0} max={99999} step={0.1} suffix="s" onChange={v => replaceClip(selectedClip.id, { sourceIn: v })} />}
               <NumberControl label="Duration" value={selectedClip.duration} min={0.05} max={99999} step={0.1} suffix="s" onChange={v => replaceClip(selectedClip.id, { duration: v })} />
-              {(selectedClip.kind === 'video' || selectedClip.kind === 'audio') && <NumberControl label="Speed" value={selectedClip.playbackRate} min={0.25} max={4} step={0.25} suffix="×" onChange={v => { const scaledDuration = Math.max(0.05, selectedClip.duration * selectedClip.playbackRate / v); const linkedId = selectedClip.linkedClipId; const clips = project.clips.map(item => item.id === selectedClip.id || item.id === linkedId ? { ...item, playbackRate: v, duration: scaledDuration } : item); commitProject({ ...project, clips }, selectedClip.id); }} />}
+              {(selectedClip.kind === 'video' || selectedClip.kind === 'audio') && <>
+                <NumberControl label="Speed" value={selectedClip.playbackRate} min={0.25} max={4} step={0.25} suffix="×" onChange={v => { const scaledDuration = Math.max(0.05, selectedClip.duration * selectedClip.playbackRate / v); const linkedId = selectedClip.linkedClipId; const clips = project.clips.map(item => item.id === selectedClip.id || item.id === linkedId ? { ...item, playbackRate: v, duration: scaledDuration, keyframes: item.keyframes.filter(frame => frame.property !== 'playbackRate') } : item); commitProject({ ...project, clips }, selectedClip.id); }} />
+                <NumberControl label="Speed ramp" value={playbackRateAt(selectedClip, Math.max(0, Math.min(selectedClip.duration, playhead - selectedClip.start)))} min={0.1} max={4} step={0.05} suffix="×" onChange={v => setSpeedRamp(selectedClip.id, v)} keyframe={() => addKeyframe('playbackRate')} />
+                <p className="speed-ramp-help">Move the playhead and set different speeds at different points. Ease-in-out keyframes create smooth slow-motion ramps.</p>
+              </>}
             </InspectorSection>
             {selectedClip.kind === 'audio' && <InspectorSection title="AUDIO" icon={<Volume2 size={13} />}><NumberControl label="Gain" value={selectedClip.gain} min={0} max={1} step={0.05} onChange={v => replaceClip(selectedClip.id, { gain: v })} keyframe={() => addKeyframe('gain')} /><NumberControl label="Pan" value={selectedClip.pan} min={-1} max={1} step={0.1} onChange={v => replaceClip(selectedClip.id, { pan: v })} keyframe={() => addKeyframe('pan')} /></InspectorSection>}
             {selectedClip.kind === 'text' && selectedClip.text && <InspectorSection title="TEXT" icon={<Type size={13} />}><label className="field-block"><span>Content</span><textarea value={selectedClip.text.text} onChange={event => replaceClip(selectedClip.id, { text: { ...selectedClip.text!, text: event.target.value } })} rows={3} /></label><div className="control-row"><label>Font size</label><input type="number" min={8} max={240} value={selectedClip.text.fontSize} onChange={event => replaceClip(selectedClip.id, { text: { ...selectedClip.text!, fontSize: Number(event.target.value) } })} /></div><div className="control-row"><label>Typeface</label><select value={selectedClip.text.fontFamily} onChange={event => replaceClip(selectedClip.id, { text: { ...selectedClip.text!, fontFamily: event.target.value } })}><option>Arial</option><option>Inter</option><option>Georgia</option><option>Impact</option><option>Verdana</option><option>Courier New</option></select></div><div className="control-row"><label>Weight</label><select value={selectedClip.text.fontWeight} onChange={event => replaceClip(selectedClip.id, { text: { ...selectedClip.text!, fontWeight: event.target.value } })}><option value="400">Regular</option><option value="500">Medium</option><option value="600">Semibold</option><option value="700">Bold</option><option value="800">Extra bold</option></select></div><div className="control-row"><label>Alignment</label><select value={selectedClip.text.align} onChange={event => replaceClip(selectedClip.id, { text: { ...selectedClip.text!, align: event.target.value as CanvasTextAlign } })}><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></div><div className="control-row"><label>Color</label><input type="color" value={selectedClip.text.color} onChange={event => replaceClip(selectedClip.id, { text: { ...selectedClip.text!, color: event.target.value } })} /></div><div className="control-row"><label>Outline</label><input type="color" value={selectedClip.text.outlineColor} onChange={event => replaceClip(selectedClip.id, { text: { ...selectedClip.text!, outlineColor: event.target.value } })} /><input type="number" min={0} max={12} value={selectedClip.text.outlineWidth} onChange={event => replaceClip(selectedClip.id, { text: { ...selectedClip.text!, outlineWidth: Number(event.target.value) } })} /></div><label className="check-control"><input type="checkbox" checked={selectedClip.text.shadow} onChange={event => replaceClip(selectedClip.id, { text: { ...selectedClip.text!, shadow: event.target.checked } })} /> Drop shadow</label></InspectorSection>}
@@ -984,13 +1079,13 @@ export default function App() {
               <EffectControl effect={effect} clip={selectedClip} playhead={playhead} onChange={(key, value) => { const property = `effect:${effect.id}:${key}`; const localTime = Math.max(0, Math.min(selectedClip.duration, playhead - selectedClip.start)); if (typeof value === 'number' && selectedClip.keyframes.some(frame => frame.property === property)) { const frame: Keyframe = { id: createId('kf'), property, time: localTime, value, easing: 'linear' }; replaceClip(selectedClip.id, { keyframes: [...selectedClip.keyframes.filter(item => !(item.property === property && Math.abs(item.time - localTime) < 0.0001)), frame] }, !effectDragStartRef.current); } else updateEffect(effect.id, { params: { ...effect.params, [key]: value } }); }} onKeyframe={key => addKeyframe(`effect:${effect.id}:${key}`)} onScrubStart={beginEffectGesture} onScrubEnd={endEffectGesture} />
             </div>) : <p className="muted-copy">No effects applied.</p>}<button className="add-effect-inline" onClick={() => setActivePanel('effects')}><Plus size={13} /> Browse effects</button></div></InspectorSection>
             <InspectorSection title="KEYFRAMES" icon={<Activity size={13} />}><div className="keyframe-list">{selectedClip.keyframes.length ? selectedClip.keyframes.slice().sort((a, b) => a.time - b.time).map(frame => <div className="keyframe-row" key={frame.id}><span className="key-diamond">◆</span><span>{frame.property.startsWith('effect:') ? (() => { const [, effectId, key] = frame.property.split(':'); const effect = selectedClip.effects.find(item => item.id === effectId); return `${effect ? getEffectLabel(effect.type) : 'Effect'} · ${key}`; })() : frame.property}</span><span>{frame.time.toFixed(2)}s</span><button className="subtle-icon" onClick={() => replaceClip(selectedClip.id, { keyframes: selectedClip.keyframes.filter(k => k.id !== frame.id) })} title="Delete keyframe"><X size={11} /></button></div>) : <p className="muted-copy">Move the playhead and click a diamond to add a keyframe.</p>}</div></InspectorSection>
-          </> : selectedAsset ? <><div className="inspector-clip-header"><div className={`clip-type-icon ${selectedAsset.kind}`}>{selectedAsset.kind === 'video' ? <Video size={16} /> : selectedAsset.kind === 'audio' ? <Music2 size={16} /> : <ImageIcon size={16} />}</div><div className="inspector-clip-title"><strong>{selectedAsset.name}</strong><span>MEDIA SOURCE</span></div></div><InspectorSection title="SOURCE INFO" icon={<FileVideo size={13} />}><InfoLine label="Kind" value={selectedAsset.kind.toUpperCase()} /><InfoLine label="Duration" value={`${selectedAsset.duration.toFixed(2)} s`} /><InfoLine label="Resolution" value={selectedAsset.width && selectedAsset.height ? `${selectedAsset.width} × ${selectedAsset.height}` : '—'} /><InfoLine label="File size" value={bytesLabel(selectedAsset.size)} /><InfoLine label="Format" value={selectedAsset.mimeType || 'Unknown'} /></InspectorSection><button className="wide-action" onClick={() => addAssetToTimeline(selectedAsset.id)}><Plus size={14} /> Add to timeline</button></> : <div className="inspector-empty"><SlidersHorizontal size={24} /><strong>Nothing selected</strong><p>Select a clip on the timeline to edit its transform, timing, effects, and keyframes.</p></div>}</div> : <div className="inspector-scroll effects-browser"><div className="effects-search"><Search size={13} /><input value={searchEffect} onChange={event => setSearchEffect(event.target.value)} placeholder="Search effects and transitions" /></div>{(['COLOR & IMAGE', 'STYLIZE', 'TRANSITIONS', 'MOTION'] as const).map(category => { const entries = EFFECT_CATALOG.filter(definition => definition.category === category && `${definition.label} ${definition.description}`.toLowerCase().includes(searchEffect.toLowerCase())); return entries.length ? <React.Fragment key={category}><div className="effects-category"><span>{category}</span><span>{entries.length}</span></div>{entries.map(definition => <button key={definition.type} className="effect-browser-row" title={definition.description} disabled={(!selectedClip && !selectedAsset) || ((selectedClip?.kind === 'audio' || (!selectedClip && selectedAsset?.kind === 'audio')) && !['fade-in', 'fade-out', 'cross-dissolve'].includes(definition.type))} onClick={() => addEffect(definition.type)}><div className="effect-icon">{category === 'TRANSITIONS' ? <Layers size={14} /> : category === 'MOTION' ? <Activity size={14} /> : category === 'STYLIZE' ? <Sparkles size={14} /> : <Wand2 size={14} />}</div><div><strong>{definition.label}</strong><small>{definition.description}</small></div><Plus size={14} /></button>)}</React.Fragment> : null; })}<div className="effects-footnote"><Check size={13} /> Layer effects are composited in the preview and browser-recorded export. Effect order and browser codec support can affect output.</div></div>}
+          </> : selectedAsset ? <><div className="inspector-clip-header"><div className={`clip-type-icon ${selectedAsset.kind}`}>{selectedAsset.kind === 'video' ? <Video size={16} /> : selectedAsset.kind === 'audio' ? <Music2 size={16} /> : <ImageIcon size={16} />}</div><div className="inspector-clip-title"><strong>{selectedAsset.name}</strong><span>MEDIA SOURCE</span></div></div><InspectorSection title="SOURCE INFO" icon={<FileVideo size={13} />}><InfoLine label="Kind" value={selectedAsset.kind.toUpperCase()} /><InfoLine label="Duration" value={`${selectedAsset.duration.toFixed(2)} s`} /><InfoLine label="Resolution" value={selectedAsset.width && selectedAsset.height ? `${selectedAsset.width} × ${selectedAsset.height}` : '—'} /><InfoLine label="File size" value={bytesLabel(selectedAsset.size)} /><InfoLine label="Format" value={selectedAsset.mimeType || 'Unknown'} /></InspectorSection><button className="wide-action" onClick={() => addAssetToTimeline(selectedAsset.id)}><Plus size={14} /> Add to timeline</button></> : <div className="inspector-empty"><SlidersHorizontal size={24} /><strong>Nothing selected</strong><p>Select a clip on the timeline to edit its transform, timing, effects, and keyframes.</p></div>}</div> : <div className="inspector-scroll effects-browser"><div className="effects-search"><Search size={13} /><input value={searchEffect} onChange={event => setSearchEffect(event.target.value)} placeholder="Search effects and transitions" /></div>{(['COLOR & IMAGE', 'STYLIZE', 'TRANSITIONS', 'MOTION'] as const).map(category => { const entries = EFFECT_CATALOG.filter(definition => definition.category === category && `${definition.label} ${definition.description}`.toLowerCase().includes(searchEffect.toLowerCase())); return entries.length ? <React.Fragment key={category}><div className="effects-category"><span>{category}</span><span>{entries.length}</span></div>{entries.map(definition => <button key={definition.type} className="effect-browser-row" title={`${definition.description} · Drag onto a video layer to create an adjustment layer`} draggable onDragStart={event => { event.dataTransfer.setData('application/x-cutline-effect', definition.type); event.dataTransfer.effectAllowed = 'copy'; }} onClick={() => { const audioOnly = (selectedClip?.kind === 'audio' || (!selectedClip && selectedAsset?.kind === 'audio')) && !['fade-in', 'fade-out', 'cross-dissolve'].includes(definition.type); if (audioOnly) createAdjustmentLayer(definition.type); else addEffect(definition.type); }}><div className="effect-icon">{category === 'TRANSITIONS' ? <Layers size={14} /> : category === 'MOTION' ? <Activity size={14} /> : category === 'STYLIZE' ? <Sparkles size={14} /> : <Wand2 size={14} />}</div><div><strong>{definition.label}</strong><small>{definition.description}</small></div><Plus size={14} /></button>)}</React.Fragment> : null; })}<div className="effects-footnote"><Check size={13} /> Layer effects are composited in the preview and browser-recorded export. Effect order and browser codec support can affect output.</div></div>}
         </aside>
       </main>
       <div className="timeline-resize-bar" role="separator" aria-label="Resize timeline height" aria-orientation="horizontal" tabIndex={0} onPointerDown={event => startResize(event, { axis: 'y', side: 'timeline', startPos: event.clientY, initial: timelineHeight })} onKeyDown={event => { if (event.key === 'ArrowUp') setTimelineHeight(height => Math.min(560, height + 12)); if (event.key === 'ArrowDown') setTimelineHeight(height => Math.max(230, height - 12)); }}><span /></div>
 
       <section className="timeline-panel">
-        <div className="timeline-titlebar"><div className="timeline-heading"><span className="timeline-heading-icon"><Layers size={15} /></span><strong>TIMELINE</strong><span className="timeline-sequence-name">{project.settings.name}</span><span className="timeline-divider" /><span className="timeline-clip-count">{project.clips.length} clips</span></div><div className="timeline-controls"><button className={`icon-button ${tool === 'select' ? 'active' : ''}`} title="Selection tool" onClick={() => setTool('select')}><MousePointer2 size={14} /></button><button className={`icon-button ${tool === 'blade' ? 'active' : ''}`} title="Blade tool" onClick={() => setTool('blade')}><Scissors size={14} /></button><button className={`icon-button ${snapEnabled ? 'active' : ''}`} title="Snapping" onClick={() => setSnapEnabled(v => !v)}><Magnet size={14} /></button><span className="timeline-divider" /><button className="icon-button" title="Zoom out" onClick={() => setZoom(z => Math.max(18, z - 8))}><span className="zoom-symbol">−</span></button><input className="zoom-slider" type="range" min={18} max={180} value={zoom} onChange={event => setZoom(Number(event.target.value))} aria-label="Timeline zoom" /><button className="icon-button" title="Zoom in" onClick={() => setZoom(z => Math.min(180, z + 8))}><span className="zoom-symbol">+</span></button><button className="icon-button" title="Zoom to sequence" onClick={() => setZoom(Math.max(18, Math.min(180, Math.floor(1100 / duration))))}><Maximize2 size={13} /></button></div></div>
+        <div className="timeline-titlebar"><div className="timeline-heading"><span className="timeline-heading-icon"><Layers size={15} /></span><strong>TIMELINE</strong><span className="timeline-sequence-name">{project.settings.name}</span><span className="timeline-divider" /><span className="timeline-clip-count">{project.clips.length} clips</span><button className="timeline-add-track" title="Add video layer" onClick={() => addTrack('video')}><Plus size={11} /><Video size={12} /></button><button className="timeline-add-track" title="Add audio layer" onClick={() => addTrack('audio')}><Plus size={11} /><AudioLines size={12} /></button></div><div className="timeline-controls"><button className={`icon-button ${tool === 'select' ? 'active' : ''}`} title="Selection tool" onClick={() => setTool('select')}><MousePointer2 size={14} /></button><button className={`icon-button ${tool === 'blade' ? 'active' : ''}`} title="Blade tool" onClick={() => setTool('blade')}><Scissors size={14} /></button><button className={`icon-button ${snapEnabled ? 'active' : ''}`} title="Snapping" onClick={() => setSnapEnabled(v => !v)}><Magnet size={14} /></button><span className="timeline-divider" /><button className="icon-button" title="Zoom out" onClick={() => setZoom(z => Math.max(18, z - 8))}><span className="zoom-symbol">−</span></button><input className="zoom-slider" type="range" min={18} max={180} value={zoom} onChange={event => setZoom(Number(event.target.value))} aria-label="Timeline zoom" /><button className="icon-button" title="Zoom in" onClick={() => setZoom(z => Math.min(180, z + 8))}><span className="zoom-symbol">+</span></button><button className="icon-button" title="Zoom to sequence" onClick={() => setZoom(Math.max(18, Math.min(180, Math.floor(1100 / duration))))}><Maximize2 size={13} /></button></div></div>
         <div className="timeline-scroll" data-context-kind="timeline" ref={timelineScrollRef}>
           <div className="timeline-surface" style={{ width: TRACK_HEADER + timeWidth }}>
             <div className="timeline-ruler"><div className="track-label ruler-label"><span>TIME</span><span>{formatTime(playhead, project.settings.fps)}</span></div><div className="ruler-content" style={{ width: timeWidth }} onClick={event => { const rect = event.currentTarget.getBoundingClientRect(); setPlayhead(Math.max(0, (event.clientX - rect.left) / zoom)); }}>
@@ -998,15 +1093,15 @@ export default function App() {
               {project.markers.map(marker => <button className="marker-flag" key={marker.id} style={{ left: marker.time * zoom, borderTopColor: marker.color }} title={`${marker.label} · ${formatTime(marker.time, project.settings.fps)}`} onClick={event => { event.stopPropagation(); setPlayhead(marker.time); }}><span /></button>)}
             </div></div>
             {project.tracks.map(track => <div className={`track-row ${track.kind}-track`} data-context-kind="track" data-track-id={track.id} key={track.id}>
-              <div className="track-label"><div className={`track-type ${track.kind}`}>{track.kind === 'video' ? <Video size={13} /> : <AudioLines size={13} />}</div><span className="track-name">{track.name}</span><button className={`track-toggle ${track.locked ? 'flag-active' : ''}`} title={track.locked ? 'Unlock track' : 'Lock track'} onClick={() => toggleTrackFlag(track.id, 'locked')}>{track.locked ? <Lock size={12} /> : <Unlock size={12} />}</button><button className={`track-toggle ${track.kind === 'audio' && track.muted || track.kind === 'video' && track.hidden ? 'flag-active' : ''}`} title={track.kind === 'audio' ? (track.muted ? 'Unmute track' : 'Mute track') : (track.hidden ? 'Show track' : 'Hide track')} onClick={() => toggleTrackFlag(track.id, track.kind === 'audio' ? 'muted' : 'hidden')}>{track.kind === 'audio' ? track.muted ? <VolumeX size={12} /> : <Volume2 size={12} /> : track.hidden ? <EyeOff size={12} /> : <Eye size={12} />}</button></div>
+              <div className="track-label"><div className={`track-type ${track.kind}`}>{track.kind === 'video' ? <Video size={13} /> : <AudioLines size={13} />}</div>{renamingTrackId === track.id ? <input className="track-name-input" autoFocus aria-label="Layer name" value={trackNameDraft} onChange={event => setTrackNameDraft(event.target.value)} onBlur={event => finishTrackRename(track.id, event.currentTarget.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); } if (event.key === 'Escape') { event.preventDefault(); finishTrackRename(track.id, track.name); } }} onClick={event => event.stopPropagation()} /> : <span className="track-name" title="Double-click to rename layer" onDoubleClick={event => { event.stopPropagation(); setTrackNameDraft(track.name); setRenamingTrackId(track.id); }}>{track.name}</span>}<button className="track-reorder" title="Move layer up" aria-label={`Move ${track.name} up`} disabled={!canMoveTrack(track.id, -1)} onClick={event => { event.stopPropagation(); moveTrack(track.id, -1); }}><ChevronUp size={10} /></button><button className="track-reorder" title="Move layer down" aria-label={`Move ${track.name} down`} disabled={!canMoveTrack(track.id, 1)} onClick={event => { event.stopPropagation(); moveTrack(track.id, 1); }}><ChevronDown size={10} /></button><button className={`track-toggle ${track.locked ? 'flag-active' : ''}`} title={track.locked ? 'Unlock track' : 'Lock track'} onClick={() => toggleTrackFlag(track.id, 'locked')}>{track.locked ? <Lock size={12} /> : <Unlock size={12} />}</button><button className={`track-toggle ${track.kind === 'audio' && track.muted || track.kind === 'video' && track.hidden ? 'flag-active' : ''}`} title={track.kind === 'audio' ? (track.muted ? 'Unmute track' : 'Mute track') : (track.hidden ? 'Show track' : 'Hide track')} onClick={() => toggleTrackFlag(track.id, track.kind === 'audio' ? 'muted' : 'hidden')}>{track.kind === 'audio' ? track.muted ? <VolumeX size={12} /> : <Volume2 size={12} /> : track.hidden ? <EyeOff size={12} /> : <Eye size={12} />}</button></div>
               <div className={`track-content ${track.locked ? 'track-locked' : ''}`} style={{ width: timeWidth }} onClick={event => handleLaneClick(event, track)} onDragOver={event => event.preventDefault()} onDrop={event => placeClipAtDrop(event, track)}>
                 <div className="track-grid" style={{ backgroundSize: `${zoom}px 100%` }} />
                 {project.clips.filter(clip => clip.trackId === track.id).map(clip => {
                   const shown = drafts.get(clip.id) ?? clip;
                   const active = selectedClipId === clip.id;
-                  return <div key={clip.id} className={`timeline-clip ${shown.kind}-clip ${active ? 'clip-selected' : ''} ${track.locked ? 'clip-disabled' : ''}`} data-context-kind="clip" data-clip-id={clip.id} data-track-id={clip.trackId} style={{ left: shown.start * zoom, width: Math.max(12, shown.duration * zoom), opacity: track.kind === 'video' && track.hidden ? 0.45 : 1 }} draggable={!track.locked && !gesture} onDragStart={event => { event.dataTransfer.setData('application/x-cutline-clip', clip.id); event.dataTransfer.effectAllowed = 'move'; }} onClick={event => { event.stopPropagation(); if (tool === 'blade') { setPlayhead(Math.max(clip.start, Math.min(clip.start + clip.duration, (event.clientX - (event.currentTarget.parentElement?.getBoundingClientRect().left ?? 0)) / zoom))); splitAtPlayhead(clip.id); } else { setSelectedClipId(clip.id); setSelectedAssetId(null); } }} title={`${clip.name} · ${formatTime(clip.start, project.settings.fps)} · ${clip.duration.toFixed(2)}s`}>
+                  return <div key={clip.id} className={`timeline-clip ${shown.kind}-clip ${active ? 'clip-selected' : ''} ${track.locked ? 'clip-disabled' : ''}`} data-context-kind="clip" data-clip-id={clip.id} data-track-id={clip.trackId} style={{ left: shown.start * zoom, width: Math.max(12, shown.duration * zoom), opacity: track.kind === 'video' && track.hidden ? 0.45 : 1 }} draggable={!track.locked && !gesture} onDragStart={event => { event.dataTransfer.setData('application/x-cutline-clip', clip.id); event.dataTransfer.effectAllowed = 'move'; }} onClick={event => { event.stopPropagation(); if (tool === 'blade') { setPlayhead(Math.max(clip.start, Math.min(clip.start + clip.duration, (event.clientX - (event.currentTarget.parentElement?.getBoundingClientRect().left ?? 0)) / zoom))); splitAtPlayhead(clip.id); } else { setSelectedClipId(clip.id); setSelectedAssetId(null); } }} onDoubleClick={event => { event.stopPropagation(); const name = window.prompt('Layer / clip name', clip.name); if (name !== null && name.trim()) replaceClip(clip.id, { name: name.trim().slice(0, 80) }); }} title={`${clip.name} · ${formatTime(clip.start, project.settings.fps)} · ${clip.duration.toFixed(2)}s · Double-click to rename`}>
                     <button className="trim-handle trim-left" aria-label="Trim clip start" onPointerDown={event => { event.preventDefault(); event.stopPropagation(); if (!track.locked) { const nextGesture = { clipId: clip.id, mode: 'left' as const, originX: event.clientX, original: clip, draft: clip }; gestureRef.current = nextGesture; setGesture(nextGesture); } }} />
-                    <div className="clip-content"><div className="clip-header"><span className="clip-kind-mini">{shown.kind === 'video' ? <Video size={10} /> : shown.kind === 'audio' ? <AudioLines size={10} /> : shown.kind === 'text' ? <Type size={10} /> : <ImageIcon size={10} />}</span><span className="timeline-clip-name">{shown.name}</span></div>
+                    <div className="clip-content"><div className="clip-header"><span className="clip-kind-mini">{shown.kind === 'adjustment' ? <Layers size={10} /> : shown.kind === 'video' ? <Video size={10} /> : shown.kind === 'audio' ? <AudioLines size={10} /> : shown.kind === 'text' ? <Type size={10} /> : <ImageIcon size={10} />}</span><span className="timeline-clip-name">{shown.name}</span></div>
                       {shown.kind === 'audio' && <div className="waveform">{(project.assets.find(asset => asset.id === shown.assetId)?.waveform ?? []).filter((_, i) => i % 2 === 0).slice(0, Math.max(1, Math.floor(shown.duration * zoom / 3))).map((peak, i) => <i key={i} style={{ height: `${Math.max(8, peak * 90)}%` }} />)}</div>}
                       {(shown.kind === 'video' || shown.kind === 'image') && project.assets.find(asset => asset.id === shown.assetId)?.thumbnail && shown.duration * zoom > 75 && <div className="clip-thumbnail-strip" style={{ backgroundImage: `url(${project.assets.find(asset => asset.id === shown.assetId)?.thumbnail})` }} />}
                     </div><button className="trim-handle trim-right" aria-label="Trim clip end" onPointerDown={event => { event.preventDefault(); event.stopPropagation(); if (!track.locked) { const nextGesture = { clipId: clip.id, mode: 'right' as const, originX: event.clientX, original: clip, draft: clip }; gestureRef.current = nextGesture; setGesture(nextGesture); } }} />

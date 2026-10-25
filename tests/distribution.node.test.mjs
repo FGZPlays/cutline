@@ -7,7 +7,7 @@ const pkg = JSON.parse(read('../package.json'));
 
 test('one versioned project provides web and desktop commands', () => {
   assert.equal(pkg.productName, 'Cutline');
-  assert.equal(pkg.version, '0.4.1');
+  assert.equal(pkg.version, '0.4.2');
   assert.equal(typeof pkg.author.email, 'string');
   assert.ok(pkg.author.email.includes('@'));
   assert.match(pkg.build.linux.maintainer, /<[^<>]+@[^<>]+>/);
@@ -31,15 +31,19 @@ test('electron-builder targets Windows installer, Debian, Fedora, and portable L
   assert.ok(targets.includes('AppImage'));
   assert.equal(build.win.artifactName, 'Cutline-Setup-${version}.${ext}');
   assert.equal(build.linux.artifactName, 'Cutline-${version}-${arch}.${ext}');
+  assert.equal(build.publish[0].provider, 'github');
+  assert.equal(build.publish[0].owner, 'FGZPlays');
+  assert.equal(build.publish[0].repo, 'cutline');
+  assert.equal(pkg.dependencies['electron-updater'], '^6.8.11');
 });
 
-test('desktop wrapper hardens BrowserWindow and opens the editor route', () => {
+test('desktop wrapper hardens BrowserWindow and starts at the desktop home screen', () => {
   const main = read('../electron/main.cjs');
   assert.match(main, /contextIsolation:\s*true/);
   assert.match(main, /nodeIntegration:\s*false/);
   assert.match(main, /sandbox:\s*true/);
   assert.match(main, /webSecurity:\s*true/);
-  assert.match(main, /#\/editor/);
+  assert.match(main, /#\/desktop-home/);
   assert.match(main, /setWindowOpenHandler/);
 });
 
@@ -51,7 +55,7 @@ test('website contains a working web-editor route and disabled installer links u
   assert.match(site, /Cutline-Setup-\$\{APP_VERSION\}\.exe/);
   assert.match(site, /Cutline-\$\{APP_VERSION\}-amd64\.deb/);
   assert.match(site, /Cutline-\$\{APP_VERSION\}-x86_64\.rpm/);
-  assert.match(bootstrap, /window\.location\.hash === '#\/editor'/);
+  assert.match(bootstrap, /route === '#\/editor' \|\| route\.startsWith\('#\/editor\?'\)/);
   assert.match(bootstrap, /addEventListener\('hashchange'/);
 });
 

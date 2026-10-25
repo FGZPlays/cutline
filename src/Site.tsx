@@ -1,6 +1,6 @@
 import { ArrowDownToLine, ArrowRight, Check, CirclePlay, Code2, ExternalLink, Film, FolderLock, Globe2, Laptop, Monitor, Package, ShieldCheck, Sparkles, Terminal, Video } from 'lucide-react';
 
-const APP_VERSION = import.meta.env.VITE_APP_VERSION || '0.4.1';
+const APP_VERSION = import.meta.env.VITE_APP_VERSION || '0.4.2';
 const DOWNLOAD_BASE = (import.meta.env.VITE_RELEASE_DOWNLOAD_BASE || '').replace(/\/+$/, '');
 const SOURCE_REPOSITORY = (import.meta.env.VITE_SOURCE_REPOSITORY || '').replace(/\/+$/, '');
 
@@ -128,7 +128,7 @@ export default function Site() {
               </article>;
             })}
           </div>
-          <div className="site-appimage-row"><span className="site-appimage-icon"><Package size={17} /></span><div><b>Prefer a portable Linux build?</b><span>The release workflow also publishes an AppImage for compatible distributions.</span></div>{DOWNLOAD_BASE ? <a href={`${DOWNLOAD_BASE}/Cutline-${APP_VERSION}-x64.AppImage`}>Get AppImage <ArrowRight size={14} /></a> : <span className="site-appimage-soon">Included in desktop releases</span>}</div>
+          <div className="site-appimage-row"><span className="site-appimage-icon"><Package size={17} /></span><div><b>Prefer a portable Linux build?</b><span>The release workflow also publishes an AppImage for compatible distributions.</span></div>{DOWNLOAD_BASE ? <a href={`${DOWNLOAD_BASE}/Cutline-${APP_VERSION}-x86_64.AppImage`}>Get AppImage <ArrowRight size={14} /></a> : <span className="site-appimage-soon">Included in desktop releases</span>}</div>
           {!DOWNLOAD_BASE && <div className="site-release-notice"><Sparkles size={15} /><span>Installer links will activate when this project is published to GitHub and the first tagged release is built. The web editor can be opened right now.</span></div>}
         </section>
 

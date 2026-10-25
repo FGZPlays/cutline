@@ -44,3 +44,17 @@ test('applying effects connects the catalogue to selected clips and the properti
   assert.match(renderer, /applyPixelEffects\(lctx, clip, localTime, width, height\)/);
   assert.match(renderer, /ctx\.drawImage\(layer, -width \/ 2, -height \/ 2, width, height\)/);
 });
+
+
+test('smooth speed ramps and draggable adjustment layers are wired into the editor', async () => {
+  const app = await read('src/App.tsx');
+  const timeline = await read('src/lib/timeline.ts');
+  const renderer = await read('src/lib/rendering.ts');
+  assert.match(app, /setSpeedRamp/);
+  assert.match(app, /application\/x-cutline-effect/);
+  assert.match(app, /createAdjustmentLayer/);
+  assert.match(app, /track-name-input/);
+  assert.match(app, /moveTrack/);
+  assert.match(timeline, /sourceOffsetAt/);
+  assert.match(renderer, /clip\.kind === 'adjustment'/);
+});

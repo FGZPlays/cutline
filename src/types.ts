@@ -1,5 +1,5 @@
 export type AssetKind = 'video' | 'audio' | 'image';
-export type ClipKind = 'video' | 'audio' | 'image' | 'text';
+export type ClipKind = 'video' | 'audio' | 'image' | 'text' | 'adjustment';
 export type TrackKind = 'video' | 'audio';
 export type EffectType = 'brightness' | 'contrast' | 'saturation' | 'blur' | 'opacity' | 'crop' | 'chroma' | 'fade-in' | 'fade-out' | 'hue-rotate' | 'exposure' | 'gamma' | 'temperature' | 'tint' | 'grayscale' | 'sepia' | 'invert' | 'sharpen' | 'pixelate' | 'posterize' | 'threshold' | 'noise' | 'vignette' | 'drop-shadow' | 'mirror-horizontal' | 'mirror-vertical' | 'cross-dissolve' | 'wipe-left' | 'wipe-right' | 'wipe-up' | 'wipe-down' | 'slide-in-left' | 'slide-in-right' | 'slide-in-up' | 'slide-in-down' | 'zoom-in' | 'spin-in';
 
