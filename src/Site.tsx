@@ -8,45 +8,45 @@ const SOURCE_REPOSITORY = (import.meta.env.VITE_SOURCE_REPOSITORY || '').replace
 const downloads = [
   {
     id: 'windows',
-    name: 'Windows (Native)',
-    format: '.ZIP · native desktop app',
-    file: 'Cutline-Native-Windows-x64.zip',
+    name: 'Windows installer',
+    format: '.EXE · desktop installer',
+    file: `Cutline-Setup-${APP_VERSION}.exe`,
     icon: Monitor,
     detail: 'Windows 10 or newer · x64',
-    action: 'Download native app',
+    action: 'Download .exe',
     platform: 'windows',
   },
   {
     id: 'debian',
-    name: 'Linux (Native)',
-    format: '.TAR.GZ · native desktop app',
-    file: 'Cutline-Native-Linux-x64.tar.gz',
+    name: 'Debian / Ubuntu',
+    format: '.DEB · Linux installer',
+    file: `Cutline-${APP_VERSION}-amd64.deb`,
     icon: Package,
-    detail: 'Linux desktop bundle · x64; extract the archive and launch cutline',
-    action: 'Download native app',
+    detail: 'Debian, Ubuntu, Linux Mint and other Debian-based distributions · x64',
+    action: 'Download .deb',
     platform: 'linux',
   },
   {
     id: 'fedora',
     name: 'Fedora Linux',
-    format: '.RPM package',
+    format: '.RPM · Linux installer',
     file: `Cutline-${APP_VERSION}-x86_64.rpm`,
     icon: Terminal,
     detail: 'Fedora, RHEL and RPM-based distributions · x64',
     action: 'Download .rpm',
-    platform: 'fedora',
+    platform: 'linux',
   },
   {
     id: 'android',
     name: 'Android',
-    format: 'Native APK',
+    format: '.APK · native Android app',
     file: `Cutline-${APP_VERSION}-android.apk`,
     icon: Package,
-    detail: 'Android phones and tablets · touch-first interface',
+    detail: 'Android phones and tablets · touch-first native interface',
     action: 'Download APK',
     platform: 'android',
   },
-];
+];;
 
 export default function Site() {
   const [platform, setPlatform] = useState<'windows' | 'linux' | 'android' | 'mac' | 'unknown'>('unknown');
@@ -143,7 +143,7 @@ export default function Site() {
               const Icon = item.icon;
               const href = DOWNLOAD_BASE ? `${DOWNLOAD_BASE}/${encodeURIComponent(item.file)}` : undefined;
               return <article className={`site-download-card ${item.platform === platform ? 'site-download-recommended' : ''}`} key={item.id}>
-                {item.platform === platform && <span className="site-download-match"><Check size={12} /> BEST MATCH FOR THIS DEVICE</span>}
+                {item.platform === platform && <span className="site-download-match"><Check size={12} /> {platform === 'linux' ? 'LINUX PACKAGE OPTION' : 'BEST MATCH FOR THIS DEVICE'}</span>}
                 <span className="site-download-icon"><Icon size={22} /></span>
                 <div className="site-download-platform">{item.name}</div>
                 <div className="site-download-format">{item.format}</div>
@@ -153,6 +153,8 @@ export default function Site() {
               </article>;
             })}
           </div>
+
+          <div className="site-appimage-row"><span className="site-appimage-icon"><Package size={17} /></span><div><b>Native desktop builds</b><span>Optional standalone Flutter desktop builds are also available (early native version).</span></div>{DOWNLOAD_BASE ? <span><a href={`${DOWNLOAD_BASE}/Cutline-Native-Windows-x64.zip`}>Windows bundle</a> · <a href={`${DOWNLOAD_BASE}/Cutline-Native-Linux-x64.tar.gz`}>Linux bundle</a></span> : <span className="site-appimage-soon">Included in desktop releases</span>}</div>
           <div className="site-appimage-row"><span className="site-appimage-icon"><Package size={17} /></span><div><b>Prefer a portable Linux build?</b><span>A portable Linux desktop build is also available in releases.</span></div>{DOWNLOAD_BASE ? <a href={`${DOWNLOAD_BASE}/Cutline-${APP_VERSION}-x86_64.AppImage`}>Get AppImage <ArrowRight size={14} /></a> : <span className="site-appimage-soon">Included in desktop releases</span>}</div>
           {!DOWNLOAD_BASE && <div className="site-release-notice"><Sparkles size={15} /><span>Downloads activate when the matching versioned release assets are published. You can still use the browser editor now.</span></div>}
         </section>
