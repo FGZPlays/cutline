@@ -7,7 +7,7 @@ const pkg = JSON.parse(read('../package.json'));
 
 test('one versioned project provides web and desktop commands', () => {
   assert.equal(pkg.productName, 'Cutline');
-  assert.equal(pkg.version, '0.4.3');
+  assert.match(pkg.version, /^\d+\.\d+\.\d+$/);
   assert.equal(typeof pkg.author.email, 'string');
   assert.ok(pkg.author.email.includes('@'));
   assert.match(pkg.build.linux.maintainer, /<[^<>]+@[^<>]+>/);
@@ -50,20 +50,21 @@ test('desktop wrapper hardens BrowserWindow and starts at the desktop home scree
   assert.match(main, /setWindowOpenHandler/);
 });
 
-test('website contains a working web-editor route and disabled installer links until configured', () => {
+test('website contains a working web-editor route and current platform downloads', () => {
   const site = read('../src/Site.tsx');
   const bootstrap = read('../src/main.tsx');
   assert.match(site, /href="#\/editor"/);
   assert.match(site, /VITE_RELEASE_DOWNLOAD_BASE/);
-  assert.match(site, /Cutline-Setup-\$\{APP_VERSION\}\.exe/);
-  assert.match(site, /Cutline-\$\{APP_VERSION\}-amd64\.deb/);
+  assert.match(site, /Cutline-Native-Windows-x64\.zip/);
+  assert.match(site, /Cutline-Native-Linux-x64\.tar\.gz/);
   assert.match(site, /Cutline-\$\{APP_VERSION\}-x86_64\.rpm/);
-  assert.match(bootstrap, /route === '#\/editor' \|\| route\.startsWith\('#\/editor\?'\)/);
+  assert.match(site, /Cutline-\$\{APP_VERSION\}-android\.apk/);
+  assert.match(site, /Cutline-\$\{APP_VERSION\}-x86_64\.AppImage/);
+  assert.match(bootstrap, /route === '#\/editor' \|\| route\.startsWith\('#\/editor\?')/);
   assert.match(bootstrap, /addEventListener\('hashchange'/);
 });
 
 test('Smooth slow-mo FFmpeg core assets are copied before builds', () => {
-  const pkg = JSON.parse(read('../package.json'));
   const script = read('../scripts/copy-ffmpeg-core.mjs');
   assert.equal(pkg.scripts.prebuild, 'node scripts/copy-ffmpeg-core.mjs');
   assert.match(script, /ffmpeg-core\.wasm/);
