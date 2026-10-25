@@ -1,4 +1,5 @@
-const { app, BrowserWindow, Menu, shell } = require('electron');
+const { app, BrowserWindow, Menu, shell, dialog } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
@@ -64,10 +65,64 @@ function createWindow() {
   }
 }
 
+function setupAutoUpdates() {
+  if (!app.isPackaged || process.env.CUTLINE_DISABLE_AUTO_UPDATE === '1') return;
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.allowDowngrade = false;
+  autoUpdater.allowPrerelease = false;
+  autoUpdater.logger = console;
+
+  autoUpdater.on('error', error => {
+    console.warn('[Cutline updater] Update check/download failed:', error);
+  });
+  autoUpdater.on('update-available', info => {
+    console.info(`[Cutline updater] Version ${info.version} available; downloading in the background.`);
+  });
+  autoUpdater.on('update-not-available', info => {
+    console.info(`[Cutline updater] Cutline ${info.version} is up to date.`);
+  });
+  autoUpdater.on('download-progress', progress => {
+    console.info(`[Cutline updater] Downloading update: ${Math.round(progress.percent)}%`);
+  });
+  autoUpdater.on('update-downloaded', async info => {
+    try {
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        autoUpdater.quitAndInstall();
+        return;
+      }
+      const { response } = await dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        title: 'Cutline update ready',
+        message: `Cutline ${info.version} has been downloaded.`,
+        detail: 'Restart now to finish installing the update, or choose Later. The update will install automatically when you quit Cutline.',
+        buttons: ['Restart now', 'Later'],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true,
+      });
+      if (response === 0) autoUpdater.quitAndInstall();
+    } catch (error) {
+      console.warn('[Cutline updater] Could not show update prompt:', error);
+    }
+  });
+
+  const checkForUpdates = () => {
+    if (app.isQuitting) return;
+    void autoUpdater.checkForUpdates().catch(error => {
+      console.warn('[Cutline updater] Could not check for updates:', error);
+    });
+  };
+  setTimeout(checkForUpdates, 8000).unref();
+  setInterval(checkForUpdates, 6 * 60 * 60 * 1000).unref();
+}
+
 app.whenReady().then(() => {
   // Cutline owns its menus inside the renderer; disable Electron's default menu bar.
   Menu.setApplicationMenu(null);
   createWindow();
+  setupAutoUpdates();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });

@@ -1,7 +1,7 @@
 {
   "name": "cutline-video-editor",
   "productName": "Cutline",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
@@ -27,7 +27,8 @@
   "dependencies": {
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "electron-updater": "^6.8.11"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",
@@ -110,6 +111,18 @@
     },
     "deb": {
       "packageCategory": "video"
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "FGZPlays",
+        "repo": "cutline",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/FGZPlays/cutline.git"
   }
 }

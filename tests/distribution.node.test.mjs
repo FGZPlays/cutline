@@ -7,7 +7,7 @@ const pkg = JSON.parse(read('../package.json'));
 
 test('one versioned project provides web and desktop commands', () => {
   assert.equal(pkg.productName, 'Cutline');
-  assert.equal(pkg.version, '0.4.1');
+  assert.equal(pkg.version, '0.4.2');
   assert.equal(typeof pkg.author.email, 'string');
   assert.ok(pkg.author.email.includes('@'));
   assert.match(pkg.build.linux.maintainer, /<[^<>]+@[^<>]+>/);
@@ -31,6 +31,10 @@ test('electron-builder targets Windows installer, Debian, Fedora, and portable L
   assert.ok(targets.includes('AppImage'));
   assert.equal(build.win.artifactName, 'Cutline-Setup-${version}.${ext}');
   assert.equal(build.linux.artifactName, 'Cutline-${version}-${arch}.${ext}');
+  assert.equal(build.publish[0].provider, 'github');
+  assert.equal(build.publish[0].owner, 'FGZPlays');
+  assert.equal(build.publish[0].repo, 'cutline');
+  assert.equal(pkg.dependencies['electron-updater'], '^6.8.11');
 });
 
 test('desktop wrapper hardens BrowserWindow and opens the editor route', () => {
