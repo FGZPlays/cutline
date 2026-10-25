@@ -1271,7 +1271,7 @@ export default function App() {
           : clip.assetId;
         if (!sourceId || !urls.get(sourceId)) return null;
         if (clip.kind === 'video') return <video key={clip.id} ref={element => { if (element) mediaRefMap.current.set(clip.id, element); else mediaRefMap.current.delete(clip.id); }} src={urls.get(sourceId)} preload="auto" muted playsInline />;
-        if (clip.kind === 'audio') return <audio key={clip.id} ref={element => { if (element) audioRefMap.current.set(clip.id, element); else audioRefMap.current.delete(clip.id); }} src={urls.get(clip.assetId)} preload="auto" />;
+        if (clip.kind === 'audio') return <audio key={clip.id} ref={element => { if (element) audioRefMap.current.set(clip.id, element); else audioRefMap.current.delete(clip.id); }} src={urls.get(sourceId)} preload="auto" />;
         return null;
       })}</div>
 
