@@ -35,8 +35,15 @@ jobs:
         run: |
           echo "VITE_APP_VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
           echo "VITE_SOURCE_REPOSITORY=https://github.com/${GITHUB_REPOSITORY}" >> "$GITHUB_ENV"
-          if curl --fail --silent --show-error -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases/latest" >/dev/null; then
-            echo "VITE_RELEASE_DOWNLOAD_BASE=https://github.com/${GITHUB_REPOSITORY}/releases/latest/download" >> "$GITHUB_ENV"
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          if RELEASE_JSON="$(curl --fail --silent --show-error -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases/latest")"; then
+            LATEST_RELEASE_TAG="$(printf '%s' "$RELEASE_JSON" | node -e "let input=''; process.stdin.on('data', chunk => input += chunk); process.stdin.on('end', () => { try { console.log(JSON.parse(input).tag_name || '') } catch { console.log('') } });")"
+            if [[ "$LATEST_RELEASE_TAG" == "v$PACKAGE_VERSION" ]]; then
+              echo "VITE_RELEASE_DOWNLOAD_BASE=https://github.com/${GITHUB_REPOSITORY}/releases/latest/download" >> "$GITHUB_ENV"
+            else
+              echo "VITE_RELEASE_DOWNLOAD_BASE=" >> "$GITHUB_ENV"
+              echo "Latest release ($LATEST_RELEASE_TAG) does not match app version v$PACKAGE_VERSION; keeping installers disabled until the matching release is published."
+            fi
           else
             echo "VITE_RELEASE_DOWNLOAD_BASE=" >> "$GITHUB_ENV"
           fi

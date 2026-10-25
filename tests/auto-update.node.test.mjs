@@ -27,3 +27,9 @@ test('release version and portable Linux filename stay aligned', () => {
   assert.equal(pkg.version, '0.4.2');
   assert.match(site, /Cutline-\$\{APP_VERSION\}-x86_64\.AppImage/);
 });
+
+test('website download links wait for a matching versioned release', () => {
+  const workflow = read('../.github/workflows/site.yml');
+  assert.match(workflow, /LATEST_RELEASE_TAG.*v\$PACKAGE_VERSION/);
+  assert.match(workflow, /VITE_RELEASE_DOWNLOAD_BASE=/);
+});
