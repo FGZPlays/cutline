@@ -183,7 +183,7 @@ class _EditorHomeState extends State<EditorHome> {
           const Text('Add video, audio or image files from your device.', textAlign: TextAlign.center, style: TextStyle(color: textMuted, fontSize: 11, height: 1.5)),
           const SizedBox(height: 13),
           FilledButton.tonal(onPressed: _busy ? null : _importMedia, child: Text(_busy ? 'Opening…' : 'Import files')),
-        ]))
+        ])))
       : ListView.separated(
           padding: const EdgeInsets.all(8),
           itemCount: _clips.length,
