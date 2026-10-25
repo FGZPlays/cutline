@@ -86,6 +86,8 @@ test('CI workflows build the website and publish desktop artifacts on a version 
   assert.match(release, /dist:linux/);
   assert.match(release, /flutter build apk --release/);
   assert.match(release, /libasound2-dev/);
+  assert.match(release, /libmpv-dev/);
+  assert.match(release, /compileSdk = 36/);
   assert.match(release, /workflow_dispatch/);
   assert.match(release, /softprops\/action-gh-release/);
   assert.match(release, /pattern: cutline-\*/);
