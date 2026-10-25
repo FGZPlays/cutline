@@ -1,3 +1,4 @@
+# Recovery note: use a commit message containing [build-release] to build the current package version once.
 name: Build Cutline desktop installers
 
 on:
