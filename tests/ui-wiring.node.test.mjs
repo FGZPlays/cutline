@@ -58,3 +58,16 @@ test('smooth speed ramps and draggable adjustment layers are wired into the edit
   assert.match(timeline, /sourceOffsetAt/);
   assert.match(renderer, /clip\.kind === 'adjustment'/);
 });
+
+
+test('sequence aspect ratios and direct preview transforms are wired into the editor', async () => {
+  const app = await read('src/App.tsx');
+  assert.match(app, /setSequenceAspectRatio/);
+  assert.match(app, /9:16 · Portrait \/ Shorts/);
+  assert.match(app, /aspectRatioPreset\(project\.settings\.width, project\.settings\.height\)/);
+  assert.match(app, /preview-transform-box/);
+  assert.match(app, /aria-label="Resize selected clip"/);
+  assert.match(app, /withPreviewTransform\(draft, 'x'/);
+  assert.match(app, /withPreviewTransform\(draft, 'y'/);
+  assert.match(app, /withPreviewTransform\(draft, 'scale'/);
+});
