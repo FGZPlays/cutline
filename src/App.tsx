@@ -166,8 +166,9 @@ export default function App() {
     if (clip.kind === 'text' && clip.text) {
       const lines = clip.text.text.split('\n');
       const maxChars = Math.max(1, ...lines.map(line => line.length));
-      baseWidth = Math.min(previewCanvasMetrics.width * 0.9, Math.max(40, maxChars * clip.text.fontSize * 0.62 + clip.text.outlineWidth * 2));
-      baseHeight = Math.max(24, lines.length * clip.text.fontSize * 1.18);
+      const previewFontSize = clip.text.fontSize * previewCanvasMetrics.width / Math.max(1, project.settings.width);
+      baseWidth = Math.min(previewCanvasMetrics.width * 0.9, Math.max(24, maxChars * previewFontSize * 0.62 + clip.text.outlineWidth * 2 * previewCanvasMetrics.width / Math.max(1, project.settings.width)));
+      baseHeight = Math.max(18, lines.length * previewFontSize * 1.18);
     } else {
       const asset = project.assets.find(item => item.id === clip.assetId);
       const mediaWidth = asset?.width || project.settings.width;
