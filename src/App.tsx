@@ -96,6 +96,8 @@ export default function App() {
   const [exportProgress, setExportProgress] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [showSequenceSettings, setShowSequenceSettings] = useState(false);
+  const [showTextDialog, setShowTextDialog] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('Your title');
   const [gesture, setGesture] = useState<Gesture | null>(null);
   const [drafts, setDrafts] = useState<Map<string, Clip>>(new Map());
   const gestureRef = useRef<Gesture | null>(null);
@@ -554,18 +556,28 @@ export default function App() {
   };
 
   const addText = () => {
-    const text = window.prompt('Title text', 'Your title');
-    if (!text) return;
+    setTitleDraft('Your title');
+    setContextMenu(null);
+    setShowTextDialog(true);
+  };
+
+  const createTextClip = () => {
+    const text = titleDraft.trim();
+    if (!text) {
+      setNotice('Enter some text before adding the title');
+      return;
+    }
     let track = project.tracks.find(t => t.id === 'track_v2' && !t.locked) ?? project.tracks.find(t => t.kind === 'video' && !t.locked);
     let tracks = project.tracks;
     if (!track) {
-      track = { id: createId('track'), name: 'V3', kind: 'video', muted: false, hidden: false, locked: false };
+      track = { id: createId('track'), name: `V${project.tracks.filter(t => t.kind === 'video').length + 1}`, kind: 'video', muted: false, hidden: false, locked: false };
       tracks = [...tracks, track];
     }
     const clip = makeClip({ trackId: track.id, name: `Title: ${text.slice(0, 24)}`, kind: 'text', duration: 5, start: playheadRef.current, text: { text, fontFamily: 'Arial', fontSize: 72, fontWeight: '700', color: '#ffffff', align: 'center', outlineColor: '#111111', outlineWidth: 2, shadow: true } });
     commitProject({ ...project, tracks, clips: [...project.clips, clip] }, clip.id);
     setSelectedAssetId(null);
-    setNotice('Editable title created');
+    setShowTextDialog(false);
+    setNotice('Editable title created — edit its text in the Inspector');
   };
 
   const addMarker = () => {
@@ -1328,6 +1340,15 @@ export default function App() {
           <button role="menuitem" onClick={() => runContextAction('export')}><Download size={13} /> Export sequence…</button>
           <button role="menuitem" onClick={() => runContextAction('deselect')}><X size={13} /> Deselect</button>
         </>}
+      </div>}
+      {showTextDialog && <div role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setShowTextDialog(false); }} style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'grid', placeItems: 'center', padding: 20, background: 'rgba(0,0,0,.68)', backdropFilter: 'blur(5px)' }}>
+        <form role="dialog" aria-modal="true" aria-labelledby="new-title-heading" onSubmit={event => { event.preventDefault(); createTextClip(); }} style={{ width: 'min(440px, 100%)', padding: 24, border: '1px solid #3b3d43', borderRadius: 12, background: '#1b1c20', boxShadow: '0 24px 80px rgba(0,0,0,.55)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}><Type size={19} /><h2 id="new-title-heading" style={{ margin: 0, fontSize: 18 }}>Add text to timeline</h2></div>
+          <p style={{ margin: '0 0 16px', color: '#a6a8b0', fontSize: 13 }}>Create an editable title at the current playhead position. You can change its font, size, colour and outline in the Inspector.</p>
+          <label htmlFor="cutline-title-input" style={{ display: 'block', marginBottom: 7, fontSize: 12, color: '#c5c6cc' }}>Title text</label>
+          <textarea id="cutline-title-input" autoFocus rows={3} value={titleDraft} onChange={event => setTitleDraft(event.target.value)} placeholder="Type your title…" style={{ boxSizing: 'border-box', width: '100%', resize: 'vertical', padding: 12, border: '1px solid #484a53', borderRadius: 7, background: '#111216', color: '#fff', font: 'inherit', fontSize: 14, outlineColor: '#8c82ff' }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginTop: 18 }}><span style={{ color: '#8d8f98', fontSize: 11 }}>5-second title · starts at playhead</span><div style={{ display: 'flex', gap: 8 }}><button type="button" onClick={() => setShowTextDialog(false)} style={{ padding: '9px 13px', borderRadius: 6, border: '1px solid #484a53', background: '#25262c', color: '#e5e5ea', cursor: 'pointer' }}>Cancel</button><button type="submit" disabled={!titleDraft.trim()} style={{ padding: '9px 14px', borderRadius: 6, border: 0, background: titleDraft.trim() ? '#8175f5' : '#484852', color: '#fff', fontWeight: 600, cursor: titleDraft.trim() ? 'pointer' : 'not-allowed' }}>Add to timeline</button></div></div>
+        </form>
       </div>}
     </div>
   );
