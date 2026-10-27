@@ -171,3 +171,8 @@
 .smooth-slowmo-button:disabled{opacity:.55;cursor:not-allowed}
 .smooth-slowmo-control .smooth-slowmo-note{color:#7e9a8b}
 .smooth-slowmo-control .smooth-slowmo-warning{padding-left:7px;border-left:2px solid #c9975b;color:#d1ad80}
+
+
+/* Direct manipulation controls in the program monitor. */
+.preview-transform-box{user-select:none;-webkit-user-select:none;touch-action:none;box-shadow:0 0 0 1px #0c1118aa,inset 0 0 0 1px #ffffff18}
+.preview-transform-box button{box-shadow:0 1px 5px #0009}
