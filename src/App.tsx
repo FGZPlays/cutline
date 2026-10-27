@@ -25,6 +25,24 @@ type Gesture = { clipId: string; mode: 'left' | 'right'; originX: number; origin
 type ResizeDrag = { axis: 'x' | 'y'; side: 'left' | 'right' | 'timeline'; startPos: number; initial: number };
 type ContextMenuKind = 'clip' | 'asset' | 'track' | 'timeline' | 'app';
 type ContextMenuState = { x: number; y: number; kind: ContextMenuKind; clipId?: string; assetId?: string; trackId?: string };
+type PreviewGesture = { clipId: string; mode: 'move' | 'scale'; originX: number; originY: number; canvasWidth: number; canvasHeight: number; localTime: number; original: Clip; draft: Clip; initialX: number; initialY: number; initialScale: number; boxWidth: number; boxHeight: number };
+
+function withPreviewTransform(clip: Clip, property: 'x' | 'y' | 'scale', value: number, localTime: number): Clip {
+  const frames = clip.keyframes.filter(frame => frame.property === property);
+  if (!frames.length) return { ...clip, [property]: value };
+  const time = Math.max(0, Math.min(clip.duration, localTime));
+  const existing = frames.find(frame => Math.abs(frame.time - time) < 0.0001);
+  const keyframes = existing
+    ? clip.keyframes.map(frame => frame.id === existing.id ? { ...frame, value } : frame)
+    : [...clip.keyframes, { id: createId('kf'), property, time, value, easing: 'ease-in-out' as const }];
+  return { ...clip, keyframes };
+}
+
+function aspectRatioPreset(width: number, height: number): string {
+  const ratio = width / Math.max(1, height);
+  const presets: [string, number][] = [['16:9', 16 / 9], ['9:16', 9 / 16], ['1:1', 1], ['4:3', 4 / 3], ['3:2', 3 / 2], ['21:9', 21 / 9]];
+  return presets.find(([, value]) => Math.abs(ratio - value) < 0.015)?.[0] ?? 'custom';
+}
 
 function newProject(name = 'Untitled Project'): Project {
   const now = Date.now();
@@ -98,6 +116,10 @@ export default function App() {
   const [showSequenceSettings, setShowSequenceSettings] = useState(false);
   const [showTextDialog, setShowTextDialog] = useState(false);
   const [titleDraft, setTitleDraft] = useState('Your title');
+  const [previewSize, setPreviewSize] = useState({ width: 0, height: 0 });
+  const [previewDraft, setPreviewDraft] = useState<Clip | null>(null);
+  const previewDraftRef = useRef<Clip | null>(null);
+  const previewGestureRef = useRef<PreviewGesture | null>(null);
   const [gesture, setGesture] = useState<Gesture | null>(null);
   const [drafts, setDrafts] = useState<Map<string, Clip>>(new Map());
   const gestureRef = useRef<Gesture | null>(null);
@@ -111,6 +133,7 @@ export default function App() {
   const effectDragStartRef = useRef<Project | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const programScreenRef = useRef<HTMLDivElement | null>(null);
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
   const mediaRefMap = useRef<Map<string, HTMLVideoElement>>(new Map());
   const audioRefMap = useRef<Map<string, HTMLAudioElement>>(new Map());
@@ -124,6 +147,39 @@ export default function App() {
 
   const selectedClip = project.clips.find(clip => clip.id === selectedClipId) ?? null;
   const selectedAsset = project.assets.find(asset => asset.id === selectedAssetId) ?? null;
+  const activePreviewClip = previewDraft ?? selectedClip;
+  const previewCanvasMetrics = useMemo(() => {
+    const ratio = project.settings.width / Math.max(1, project.settings.height);
+    const width = Math.min(previewSize.width, previewSize.height * ratio);
+    const height = ratio > 0 ? width / ratio : 0;
+    return { width, height, left: (previewSize.width - width) / 2, top: (previewSize.height - height) / 2 };
+  }, [previewSize, project.settings.width, project.settings.height]);
+  const previewSelection = useMemo(() => {
+    if (!activePreviewClip || !['video', 'image', 'text'].includes(activePreviewClip.kind) || playhead < activePreviewClip.start || playhead >= activePreviewClip.start + activePreviewClip.duration || !previewCanvasMetrics.width || !previewCanvasMetrics.height) return null;
+    const clip = activePreviewClip;
+    const localTime = Math.max(0, playhead - clip.start);
+    const x = evaluateKeyframes(clip.keyframes, 'x', localTime, clip.x);
+    const y = evaluateKeyframes(clip.keyframes, 'y', localTime, clip.y);
+    const scale = evaluateKeyframes(clip.keyframes, 'scale', localTime, clip.scale);
+    let baseWidth = previewCanvasMetrics.width;
+    let baseHeight = previewCanvasMetrics.height;
+    if (clip.kind === 'text' && clip.text) {
+      const lines = clip.text.text.split('\\n');
+      const maxChars = Math.max(1, ...lines.map(line => line.length));
+      baseWidth = Math.min(previewCanvasMetrics.width * 0.9, Math.max(40, maxChars * clip.text.fontSize * 0.62 + clip.text.outlineWidth * 2));
+      baseHeight = Math.max(24, lines.length * clip.text.fontSize * 1.18);
+    } else {
+      const asset = project.assets.find(item => item.id === clip.assetId);
+      const mediaWidth = asset?.width || project.settings.width;
+      const mediaHeight = asset?.height || project.settings.height;
+      const fit = Math.min(previewCanvasMetrics.width / Math.max(1, mediaWidth), previewCanvasMetrics.height / Math.max(1, mediaHeight));
+      baseWidth = mediaWidth * fit;
+      baseHeight = mediaHeight * fit;
+    }
+    const boxWidth = Math.max(24, baseWidth * scale);
+    const boxHeight = Math.max(24, baseHeight * scale);
+    return { clip, x, y, scale, localTime, boxWidth, boxHeight, left: previewCanvasMetrics.left + previewCanvasMetrics.width / 2 + previewCanvasMetrics.width * x / 100 - boxWidth / 2, top: previewCanvasMetrics.top + previewCanvasMetrics.height / 2 + previewCanvasMetrics.height * y / 100 - boxHeight / 2 };
+  }, [activePreviewClip, playhead, previewCanvasMetrics, project.assets, project.settings.width, project.settings.height]);
   const duration = useMemo(() => Math.max(15, sequenceDuration(project)), [project]);
   const timeWidth = Math.max(duration * zoom, 1200);
   const visibleAssets = project.assets.filter(asset => !asset.hidden && asset.name.toLowerCase().includes(assetFilter.toLowerCase()));
@@ -279,12 +335,65 @@ export default function App() {
         if (graph) graph.panner.pan.value = Math.max(-1, Math.min(1, evaluateKeyframes(clip.keyframes, 'pan', time - clip.start, clip.pan)));
       }
       const canvas = canvasRef.current;
-      if (canvas) drawFrame(canvas, project, time, mediaRefMap.current, imageMap.current);
+      if (canvas) {
+        const draft = previewDraftRef.current;
+        const renderProject = draft ? { ...project, clips: project.clips.map(clip => clip.id === draft.id ? draft : clip) } : project;
+        drawFrame(canvas, renderProject, time, mediaRefMap.current, imageMap.current);
+      }
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, [project, isPlaying, duration, assetEpoch]);
+
+  useEffect(() => {
+    const screen = programScreenRef.current;
+    if (!screen) return;
+    const update = () => setPreviewSize({ width: screen.clientWidth, height: screen.clientHeight });
+    update();
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
+    observer?.observe(screen);
+    window.addEventListener('resize', update);
+    return () => { observer?.disconnect(); window.removeEventListener('resize', update); };
+  }, []);
+
+  useEffect(() => {
+    const handlePreviewPointerMove = (event: PointerEvent) => {
+      const current = previewGestureRef.current;
+      if (!current) return;
+      const deltaX = (event.clientX - current.originX) / Math.max(1, current.canvasWidth) * 100;
+      const deltaY = (event.clientY - current.originY) / Math.max(1, current.canvasHeight) * 100;
+      let draft = current.original;
+      if (current.mode === 'move') {
+        draft = withPreviewTransform(draft, 'x', current.initialX + deltaX, current.localTime);
+        draft = withPreviewTransform(draft, 'y', current.initialY + deltaY, current.localTime);
+      } else {
+        const horizontal = (event.clientX - current.originX) / Math.max(24, current.boxWidth);
+        const vertical = (event.clientY - current.originY) / Math.max(24, current.boxHeight);
+        const factor = Math.max(0.05, Math.min(5, 1 + (horizontal + vertical) / 2));
+        draft = withPreviewTransform(draft, 'scale', Math.max(0.05, Math.min(5, current.initialScale * factor)), current.localTime);
+      }
+      const next = { ...current, draft };
+      previewGestureRef.current = next;
+      previewDraftRef.current = draft;
+      setPreviewDraft(draft);
+    };
+    const handlePreviewPointerUp = () => {
+      const current = previewGestureRef.current;
+      if (!current) return;
+      previewGestureRef.current = null;
+      previewDraftRef.current = null;
+      setPreviewDraft(null);
+      if (current.draft !== current.original) {
+        commitProject({ ...project, clips: project.clips.map(clip => clip.id === current.clipId ? current.draft : clip) }, current.clipId);
+        setSelectedAssetId(null);
+        setNotice(current.mode === 'move' ? 'Clip position updated' : 'Clip size updated');
+      }
+    };
+    window.addEventListener('pointermove', handlePreviewPointerMove);
+    window.addEventListener('pointerup', handlePreviewPointerUp);
+    return () => { window.removeEventListener('pointermove', handlePreviewPointerMove); window.removeEventListener('pointerup', handlePreviewPointerUp); };
+  }, [project, commitProject]);
 
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => {
@@ -1063,6 +1172,17 @@ export default function App() {
     commitProject(next);
   };
 
+  const setSequenceAspectRatio = (ratio: string) => {
+    const dimensions: Record<string, [number, number]> = {
+      '16:9': [1920, 1080], '9:16': [1080, 1920], '1:1': [1080, 1080],
+      '4:3': [1440, 1080], '3:2': [1620, 1080], '21:9': [2520, 1080],
+    };
+    const size = dimensions[ratio];
+    if (!size) return;
+    commitProject({ ...project, settings: { ...project.settings, width: size[0], height: size[1] } });
+    setNotice(`Sequence aspect ratio set to ${ratio}`);
+  };
+
   const openContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
     const target = (event.target as HTMLElement).closest<HTMLElement>('[data-context-kind]');
@@ -1175,7 +1295,7 @@ export default function App() {
 
             <section className="monitor-panel program-monitor">
               <div className="panel-heading"><div className="panel-title"><span>PROGRAM MONITOR</span><span className="live-chip">LIVE</span></div><span className="monitor-label">{project.settings.name}</span><button className="subtle-icon" title="Program monitor full size" onClick={() => { const canvas = canvasRef.current; if (canvas?.requestFullscreen) void canvas.requestFullscreen(); }}><Maximize2 size={14} /></button></div>
-              <div className="program-screen"><canvas ref={canvasRef} className="program-canvas" width={project.settings.width} height={project.settings.height} aria-label="Edited program preview" />{!project.clips.some(clip => ['video', 'image', 'text'].includes(clip.kind)) && <div className="program-empty"><Clapperboard size={22} /><span>Program preview</span><small>Drag media onto the timeline</small></div>}</div>
+              <div className="program-screen" ref={programScreenRef}><canvas ref={canvasRef} className="program-canvas" width={project.settings.width} height={project.settings.height} aria-label="Edited program preview" />{previewSelection && <div className="preview-transform-box" role="group" aria-label={`Transform ${previewSelection.clip.name}`} title="Drag to move · drag the corner handle to resize" style={{ position: 'absolute', zIndex: 4, left: previewSelection.left, top: previewSelection.top, width: previewSelection.boxWidth, height: previewSelection.boxHeight, boxSizing: 'border-box', border: '1px solid #8fcaff', outline: '1px solid #152b42', cursor: 'move', touchAction: 'none', pointerEvents: 'auto', background: 'rgba(91,165,255,.035)' }} onPointerDown={event => { if (event.button !== 0) return; event.preventDefault(); event.stopPropagation(); const track = project.tracks.find(item => item.id === previewSelection.clip.trackId); if (track?.locked) { setNotice('Unlock this track to transform its clip'); return; } setSelectedClipId(previewSelection.clip.id); setSelectedAssetId(null); const original = project.clips.find(item => item.id === previewSelection.clip.id); if (!original) return; const gesture = { clipId: original.id, mode: 'move' as const, originX: event.clientX, originY: event.clientY, canvasWidth: previewCanvasMetrics.width, canvasHeight: previewCanvasMetrics.height, localTime: previewSelection.localTime, original, draft: original, initialX: previewSelection.x, initialY: previewSelection.y, initialScale: previewSelection.scale, boxWidth: previewSelection.boxWidth, boxHeight: previewSelection.boxHeight }; previewGestureRef.current = gesture; previewDraftRef.current = original; setPreviewDraft(original); }}><span style={{ position: 'absolute', top: -19, left: -1, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '2px 5px', background: '#78b8f4', color: '#101821', fontSize: 10, fontWeight: 700, borderRadius: 2 }}>{previewSelection.clip.kind === 'text' ? 'TEXT' : previewSelection.clip.kind.toUpperCase()} · DRAG TO MOVE</span><button type="button" aria-label="Resize selected clip" title="Drag to resize" onPointerDown={event => { event.preventDefault(); event.stopPropagation(); const track = project.tracks.find(item => item.id === previewSelection.clip.trackId); if (track?.locked) { setNotice('Unlock this track to transform its clip'); return; } const original = project.clips.find(item => item.id === previewSelection.clip.id); if (!original) return; const gesture = { clipId: original.id, mode: 'scale' as const, originX: event.clientX, originY: event.clientY, canvasWidth: previewCanvasMetrics.width, canvasHeight: previewCanvasMetrics.height, localTime: previewSelection.localTime, original, draft: original, initialX: previewSelection.x, initialY: previewSelection.y, initialScale: previewSelection.scale, boxWidth: previewSelection.boxWidth, boxHeight: previewSelection.boxHeight }; previewGestureRef.current = gesture; previewDraftRef.current = original; setPreviewDraft(original); }} style={{ position: 'absolute', right: -6, bottom: -6, width: 13, height: 13, borderRadius: 2, border: '1px solid #152b42', background: '#d9efff', padding: 0, cursor: 'nwse-resize', touchAction: 'none' }} /></div>}{!project.clips.some(clip => ['video', 'image', 'text'].includes(clip.kind)) && <div className="program-empty"><Clapperboard size={22} /><span>Program preview</span><small>Drag media onto the timeline</small></div>}</div>
               <div className="monitor-controls"><span className="monitor-time current-time">{formatTime(playhead, project.settings.fps)}</span><div className="transport"><button className="round-small" title="Previous frame" onClick={() => { setIsPlaying(false); setPlayhead(playheadRef.current - 1 / project.settings.fps); }}><SkipBack size={13} /></button><button className="play-button" title={isPlaying ? 'Pause' : 'Play'} onClick={() => setIsPlaying(value => !value)}>{isPlaying ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" />}</button><button className="round-small" title="Next frame" onClick={() => { setIsPlaying(false); setPlayhead(playheadRef.current + 1 / project.settings.fps); }}><SkipForward size={13} /></button></div><span className="monitor-mode">{project.settings.width} × {project.settings.height}</span></div>
             </section>
           </div>
@@ -1290,7 +1410,7 @@ export default function App() {
       <input ref={fileInputRef} className="visually-hidden" type="file" multiple accept="video/*,audio/*,image/*,.mkv,.m4v,.flac,.svg" onChange={event => { if (event.target.files) void importFiles(event.target.files); event.currentTarget.value = ''; }} />
       <input ref={projectInputRef} className="visually-hidden" type="file" accept=".json,.cutline.json,application/json" onChange={event => void importProjectFile(event.target.files?.[0])} />
 
-      {showSequenceSettings && <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setShowSequenceSettings(false); }}><div className="modal-card sequence-modal"><div className="modal-header"><div><span className="modal-kicker">SEQUENCE</span><h2>Sequence settings</h2></div><button className="subtle-icon" onClick={() => setShowSequenceSettings(false)}><X size={17} /></button></div><div className="modal-body"><label className="field-block"><span>Sequence name</span><input value={project.settings.name} onChange={event => setSequenceValue('name', event.target.value)} /></label><div className="form-grid"><label className="field-block"><span>Width</span><select value={project.settings.width} onChange={event => setSequenceValue('width', Number(event.target.value))}><option value={3840}>3840 (4K UHD)</option><option value={2560}>2560 (QHD)</option><option value={1920}>1920 (Full HD)</option><option value={1280}>1280 (HD)</option><option value={854}>854 (SD widescreen)</option></select></label><label className="field-block"><span>Height</span><select value={project.settings.height} onChange={event => setSequenceValue('height', Number(event.target.value))}><option value={2160}>2160</option><option value={1440}>1440</option><option value={1080}>1080</option><option value={720}>720</option><option value={480}>480</option></select></label><label className="field-block"><span>Frame rate</span><select value={project.settings.fps} onChange={event => setSequenceValue('fps', Number(event.target.value))}><option value={23.976}>23.976 fps</option><option value={24}>24 fps</option><option value={25}>25 fps</option><option value={29.97}>29.97 fps</option><option value={30}>30 fps</option><option value={50}>50 fps</option><option value={59.94}>59.94 fps</option><option value={60}>60 fps</option></select></label><label className="field-block"><span>Background</span><input type="color" value={project.settings.background} onChange={event => setSequenceValue('background', event.target.value)} /></label></div><p className="modal-note">Changing sequence settings affects the program canvas and future exports. Browser recording frame rate and codec support depend on your browser and hardware.</p></div><div className="modal-footer"><button className="secondary-button" onClick={() => setShowSequenceSettings(false)}>Close</button><button className="primary-button" onClick={() => setShowSequenceSettings(false)}>Done</button></div></div></div>}
+      {showSequenceSettings && <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setShowSequenceSettings(false); }}><div className="modal-card sequence-modal"><div className="modal-header"><div><span className="modal-kicker">SEQUENCE</span><h2>Sequence settings</h2></div><button className="subtle-icon" onClick={() => setShowSequenceSettings(false)}><X size={17} /></button></div><div className="modal-body"><label className="field-block"><span>Sequence name</span><input value={project.settings.name} onChange={event => setSequenceValue('name', event.target.value)} /></label><div className="form-grid"><label className="field-block"><span>Aspect ratio</span><select value={aspectRatioPreset(project.settings.width, project.settings.height)} onChange={event => setSequenceAspectRatio(event.target.value)}><option value="16:9">16:9 · Landscape</option><option value="9:16">9:16 · Portrait / Shorts</option><option value="1:1">1:1 · Square</option><option value="4:3">4:3 · Classic</option><option value="3:2">3:2 · Photo</option><option value="21:9">21:9 · Cinematic</option><option value="custom">Custom dimensions</option></select></label><label className="field-block"><span>Width</span><select value={project.settings.width} onChange={event => setSequenceValue('width', Number(event.target.value))}><option value={3840}>3840 (4K UHD)</option><option value={2560}>2560 (QHD)</option><option value={2520}>2520 (21:9)</option><option value={1920}>1920 (Full HD)</option><option value={1620}>1620 (3:2)</option><option value={1440}>1440 (4:3)</option><option value={1280}>1280 (HD)</option><option value={1080}>1080 (Portrait / Square)</option><option value={854}>854 (SD widescreen)</option></select></label><label className="field-block"><span>Height</span><select value={project.settings.height} onChange={event => setSequenceValue('height', Number(event.target.value))}><option value={2160}>2160</option><option value={1920}>1920 (Portrait)</option><option value={1440}>1440</option><option value={1080}>1080</option><option value={720}>720</option><option value={480}>480</option></select></label><label className="field-block"><span>Frame rate</span><select value={project.settings.fps} onChange={event => setSequenceValue('fps', Number(event.target.value))}><option value={23.976}>23.976 fps</option><option value={24}>24 fps</option><option value={25}>25 fps</option><option value={29.97}>29.97 fps</option><option value={30}>30 fps</option><option value={50}>50 fps</option><option value={59.94}>59.94 fps</option><option value={60}>60 fps</option></select></label><label className="field-block"><span>Background</span><input type="color" value={project.settings.background} onChange={event => setSequenceValue('background', event.target.value)} /></label></div><p className="modal-note">Changing sequence settings affects the program canvas and future exports. Browser recording frame rate and codec support depend on your browser and hardware.</p></div><div className="modal-footer"><button className="secondary-button" onClick={() => setShowSequenceSettings(false)}>Close</button><button className="primary-button" onClick={() => setShowSequenceSettings(false)}>Done</button></div></div></div>}
 
       {showExport && <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setShowExport(false); }}><div className="modal-card export-modal"><div className="modal-header"><div><span className="modal-kicker">DELIVERY</span><h2>Export sequence</h2><p>Render the edited timeline, including supported visual effects and audio clips.</p></div><button className="subtle-icon" onClick={() => setShowExport(false)}><X size={17} /></button></div><div className="modal-body"><div className="export-summary"><div className="export-summary-icon"><FileVideo size={24} /></div><div><strong>{project.name}</strong><span>{formatTime(duration, project.settings.fps)} · {project.clips.length} clips · {project.tracks.length} tracks</span></div></div><div className="field-block"><span>Resolution</span><div className="preset-options"><button className={exportPreset === '720p' ? 'preset-selected' : ''} onClick={() => setExportPreset('720p')}><strong>HD</strong><span>1280 × 720</span></button><button className={exportPreset === '1080p' ? 'preset-selected' : ''} onClick={() => setExportPreset('1080p')}><strong>Full HD</strong><span>1920 × 1080</span></button><button className={exportPreset === 'source' ? 'preset-selected' : ''} onClick={() => setExportPreset('source')}><strong>Sequence</strong><span>{project.settings.width} × {project.settings.height}</span></button></div></div><div className="form-grid"><label className="field-block"><span>Frame rate</span><select value={exportFps} onChange={event => setExportFps(Number(event.target.value))}><option value={24}>24 fps</option><option value={25}>25 fps</option><option value={30}>30 fps</option><option value={50}>50 fps</option><option value={60}>60 fps</option></select></label><div className="field-block"><span>Container / codec</span><div className="readonly-value">{supportsExport ? supportsExport.includes('mp4') ? 'MP4 · H.264 (if browser exposes it)' : 'WebM · browser-supported VP8/VP9' : 'MediaRecorder unsupported'}</div></div></div><div className="export-warning"><Activity size={14} /><span>Export runs in real time in this browser tab. Long or high-resolution sequences may use significant memory and CPU. Keep this tab open.</span></div>{!supportsExport && <div className="error-note">This browser cannot record a canvas stream with MediaRecorder. Use an up-to-date desktop Chromium browser.</div>}</div><div className="modal-footer"><button className="secondary-button" onClick={() => setShowExport(false)}>Cancel</button><button className="primary-button" disabled={!supportsExport || exporting || project.clips.length === 0} onClick={() => void exportVideo()}><Download size={14} /> Start export</button></div></div></div>}
       {exporting && <div className="export-progress-panel"><div className="export-progress-heading"><div><span className="modal-kicker">RENDERING</span><strong>Exporting sequence…</strong></div><button className="subtle-icon" title="Cancel export" onClick={() => exportCancelRef.current?.()}><X size={16} /></button></div><div className="progress-track"><div style={{ width: `${exportProgress}%` }} /></div><div className="export-progress-meta"><span>{exportProgress}% complete</span><span>Keep Cutline open while rendering</span></div></div>}
